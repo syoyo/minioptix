@@ -10,11 +10,17 @@ option(MINIOPTIX_USE_CCACHE "Use ccache for faster recompile." ON)
 option(MINIOPTIX_WITH_CUEW "Use cuew(no CUDA SDK required, but need to manually generate PTX)" ON)
 set(MINIOPTIX_CUSTOM_LINKER "" CACHE STRING "Set custom linker name(e.g. 'lld'). Assume the compiler supports `-fuse=ld=` linker flags.")
 
+#set(OptiX_INSTALL_DIR "${CMAKE_SOURCE_DIR}/../" CACHE PATH "Path to OptiX installed location.")
+
 # cmake modules
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake/sanitizers)
 find_package(Sanitizers) # Address sanitizer (-DSANITIZE_ADDRESS=ON)
+
+# Assume looking for `cmake/FindOptiX.cmake`
+find_package(OptiX REQUIRED)
+
 
 # Require strict C++17
 set(CMAKE_CXX_STANDARD 17)
@@ -95,7 +101,7 @@ add_sanitizers(${MINIOPTIX_BUILD_TARGET})
 if( MINIOPTIX_CUSTOM_LINKER )
 
   message(STATUS "Use custom linker: " ${MINIOPTIX_CUSTOM_LINKER})
-  
+
   # TODO(LTE): Check if `-fuse-ld=` argument is supported on the compiler.
   set_property(TARGET ${MINIOPTIX_BUILD_TARGET} APPEND_STRING PROPERTY LINK_FLAGS " -fuse-ld=${MINIOPTIX_CUSTOM_LINKER}")
 
@@ -136,16 +142,16 @@ if(MINIOPTIX_WITH_GUI)
 
 
   # [imgui]
-  target_include_directories(${MINIOPTIX_BUILD_TARGET} 
+  target_include_directories(${MINIOPTIX_BUILD_TARGET}
                              PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/deps/")
 
   # [glad]
   target_compile_definitions(${MINIOPTIX_BUILD_TARGET} PRIVATE
                              IMGUI_IMPL_OPENGL_LOADER_GLAD)
-  target_include_directories(${MINIOPTIX_BUILD_TARGET} 
+  target_include_directories(${MINIOPTIX_BUILD_TARGET}
                              PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/deps/glad/include")
 
-  target_include_directories(${MINIOPTIX_BUILD_TARGET} 
+  target_include_directories(${MINIOPTIX_BUILD_TARGET}
                              PRIVATE ${glfw_INCLUDE_DIRS})
   list(APPEND MINIOPTIX_EXT_GUI_LIBRARIES
               glfw
@@ -198,7 +204,7 @@ endif (MINIOPTIX_BUILD_TESTS)
 if (WIN32)
   if (LLVM_MINGW_ROOT_ABSPATH)
 
-    # Copy libunwind.dll and libc++.dll 
+    # Copy libunwind.dll and libc++.dll
     add_custom_command(TARGET ${MINIOPTIX_BUILD_TARGET} POST_BUILD        # Adds a post-build event to MyTest
         COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
             "${LLVM_MINGW_ROOT_ABSPATH}/x86_64-w64-mingw32/bin/libc++.dll"      # src
@@ -208,7 +214,7 @@ if (WIN32)
         COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."
             "${LLVM_MINGW_ROOT_ABSPATH}/x86_64-w64-mingw32/bin/libunwind.dll"      # src
             $<TARGET_FILE_DIR:${MINIOPTIX_BUILD_TARGET}>)           # dest
-    
+
     # TODO(LTE): Copy asan dll only when the app is build with asan support
     add_custom_command(TARGET ${MINIOPTIX_BUILD_TARGET} POST_BUILD        # Adds a post-build event to MyTest
         COMMAND ${CMAKE_COMMAND} -E copy_if_different  # which executes "cmake - E copy_if_different..."

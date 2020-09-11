@@ -5,6 +5,7 @@
 * C++11 or later
 * CMake
 * (optional) ninja build
+* OptiX 7.1(OptiX 6 would work) SDK
 
 ## Thrid party licenses
 
