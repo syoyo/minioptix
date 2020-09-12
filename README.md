@@ -1,5 +1,8 @@
 # Mini OptiX sample
 
+* Use CUDA Driver API only
+  * Use cuew(no CUDA SDK required)
+
 ## Requirements
 
 * C++11 or later
