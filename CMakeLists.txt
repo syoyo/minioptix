@@ -10,7 +10,13 @@ option(MINIOPTIX_USE_CCACHE "Use ccache for faster recompile." ON)
 option(MINIOPTIX_WITH_CUEW "Use cuew(no CUDA SDK required, but need to manually generate PTX)" ON)
 set(MINIOPTIX_CUSTOM_LINKER "" CACHE STRING "Set custom linker name(e.g. 'lld'). Assume the compiler supports `-fuse=ld=` linker flags.")
 
-#set(OptiX_INSTALL_DIR "${CMAKE_SOURCE_DIR}/../" CACHE PATH "Path to OptiX installed location.")
+if (WIN32)
+  set(DEFAULT_OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 7.1.0/")
+else()
+  set(DEFAULT_OPTIX_INSTALL_DIR "${CMAKE_SOURCE_DIR}/../")
+endif()
+
+set(OptiX_INSTALL_DIR ${DEFAULT_OPTIX_INSTALL_DIR} CACHE PATH "Path to OptiX installed location.")
 
 # cmake modules
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_SOURCE_DIR}/cmake)
