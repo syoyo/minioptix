@@ -60,15 +60,19 @@ struct Params {
 
 template <typename T>
 struct SbtRecord {
-  // TODO: MSVC align
+#ifdef _MSC_VER
+    __declspec(align(OPTIX_SBT_RECORD_ALIGNMENT)) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
+#else // assume gcc or clang
   char header[OPTIX_SBT_RECORD_HEADER_SIZE]
       __attribute__((aligned(OPTIX_SBT_RECORD_ALIGNMENT)));
+#endif
   T data;
 };
 
 typedef SbtRecord<RayGenData> RayGenSbtRecord;
 typedef SbtRecord<int> MissSbtRecord;
 typedef SbtRecord<int> HitGroupSbtRecord;
+
 
 bool CUDAAllocDeviceMem(CUdeviceptr* dptr, size_t sz) {
   CU_CHECK(cuMemAlloc(dptr, sz));
@@ -83,6 +87,9 @@ static void context_log_cb(unsigned int level, const char* tag,
 }
 
 int main(int argc, char** argv) {
+
+  static_assert(offsetof(RayGenSbtRecord, data) % OPTIX_SBT_RECORD_ALIGNMENT == 0, "Member variable must be aligned to OPTIX_SBT_RECORD_ALIGNMENT(=16)");
+
 #ifdef MINIOPTIX_USE_CUEW
   if (cuewInit(CUEW_INIT_CUDA) != CUEW_SUCCESS) {
     std::cerr << "Failed to initialize CUDA\n";
