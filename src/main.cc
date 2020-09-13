@@ -237,7 +237,12 @@ static void BuildAccel(const OptixDeviceContext& context,
 }
 
 int main(int argc, char** argv) {
+#if _MSC_VER
+  // Assume repository top is set to the working directory(See CMakeLists.txt).
+  const std::string ptx_filename = "data/optixTriangle.ptx";
+#else
   const std::string ptx_filename = "../data/optixTriangle.ptx";
+#endif
 
   static_assert(
       offsetof(RayGenSbtRecord, data) % OPTIX_SBT_RECORD_ALIGNMENT == 0,
