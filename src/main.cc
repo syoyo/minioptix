@@ -74,16 +74,19 @@ struct RayGenData {
 };
 
 struct Params {
-  // uint8_t* image;  // RGBA
   CUdeviceptr image;  // RGBA
   unsigned int image_width;
 };
 
 template <typename T>
 struct SbtRecord {
-  // TODO: MSVC align
+#ifdef _MSC_VER
+  __declspec(align(
+      OPTIX_SBT_RECORD_ALIGNMENT)) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
+#else  // assume gcc or clang
   char header[OPTIX_SBT_RECORD_HEADER_SIZE]
       __attribute__((aligned(OPTIX_SBT_RECORD_ALIGNMENT)));
+#endif
   T data;
 };
 
@@ -119,6 +122,10 @@ bool LoadPTXFromFile(const std::string& filename, std::string* output) {
 
 int main(int argc, char** argv) {
   const std::string ptx_filename = "../data/draw_solid_color.ptx";
+
+  static_assert(
+      offsetof(RayGenSbtRecord, data) % OPTIX_SBT_RECORD_ALIGNMENT == 0,
+      "Member variable must be aligned to OPTIX_SBT_RECORD_ALIGNMENT(=16)");
 
 #ifdef MINIOPTIX_USE_CUEW
   if (cuewInit(CUEW_INIT_CUDA) != CUEW_SUCCESS) {
@@ -391,14 +398,15 @@ int main(int argc, char** argv) {
     std::vector<uint8_t> h_image;
     h_image.resize(4 * width * height);
 
-    CU_CHECK(cuMemcpyDtoH(reinterpret_cast<void *>(h_image.data()), params.image, h_image.size()));
-
+    CU_CHECK(cuMemcpyDtoH(reinterpret_cast<void*>(h_image.data()), params.image,
+                          h_image.size()));
 
     //
     // Save result to a file.
     //
     {
-      int n = stbi_write_png("output.png", width, height, /* comp */4, h_image.data(), /* stride */0);
+      int n = stbi_write_png("output.png", width, height, /* comp */ 4,
+                             h_image.data(), /* stride */ 0);
       if (n < 1) {
         std::cerr << "Failed to write PNG image.\n";
         exit(-1);
