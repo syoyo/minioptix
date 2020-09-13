@@ -12,6 +12,12 @@ Minimal dependency OptiX sample.
 * (optional) ninja build
 * OptiX 7.1(OptiX 6 would work) SDK(header files)
 
+## Supported platforms
+
+* 64bit Linux x86-64(e.g. Ubuntu 18.04)
+* Windows 10
+  * Visual Studio 2019
+
 ## Compile a shader
 
 ```
