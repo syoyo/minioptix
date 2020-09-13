@@ -1,6 +1,15 @@
+//
+// Based on optixHello sample in OptiX SDK
+//
 #include <cstdio>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
+#include <sstream>
+#include <vector>
+
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb_image_write.h"
 
 #ifdef MINIOPTIX_USE_CUEW
 #include <cuew.h>
@@ -23,6 +32,17 @@
                 << " CUDA Device API failed. retcode " << ret << "\n"; \
       exit(-1);                                                        \
     }                                                                  \
+  } while (0)
+
+#define CU_SYNC_CHECK()                                                   \
+  do {                                                                    \
+    /* assume cuCtxSynchronize() ~= cudaDeviceSynchronize() */            \
+    CUresult ret = cuCtxSynchronize();                                    \
+    if (ret != CUDA_SUCCESS) {                                            \
+      std::cerr << __FILE__ << ":" << __LINE__                            \
+                << " cuCtxSynchronize() failed. retcode " << ret << "\n"; \
+      exit(-1);                                                           \
+    }                                                                     \
   } while (0)
 
 #define OPTIX_CHECK(callfun)                                                \
@@ -54,7 +74,8 @@ struct RayGenData {
 };
 
 struct Params {
-  uint8_t* image;  // RGBA
+  // uint8_t* image;  // RGBA
+  CUdeviceptr image;  // RGBA
   unsigned int image_width;
 };
 
@@ -82,7 +103,23 @@ static void context_log_cb(unsigned int level, const char* tag,
             << "]: " << message << "\n";
 }
 
+bool LoadPTXFromFile(const std::string& filename, std::string* output) {
+  std::ifstream ifs(filename);
+  if (!ifs) {
+    return false;
+  }
+
+  std::stringstream ss;
+  ss << ifs.rdbuf();
+
+  (*output) = ss.str();
+
+  return true;
+}
+
 int main(int argc, char** argv) {
+  const std::string ptx_filename = "../data/draw_solid_color.ptx";
+
 #ifdef MINIOPTIX_USE_CUEW
   if (cuewInit(CUEW_INIT_CUDA) != CUEW_SUCCESS) {
     std::cerr << "Failed to initialize CUDA\n";
@@ -151,20 +188,11 @@ int main(int argc, char** argv) {
       std::cerr << "Failed to get Create CUDA context.\n";
       return -1;
     }
-
-    // CUmodule   module;
-    // CUresult ret = cuModuleLoadData(&module, reinterpret_cast<const void
-    // *>(ptx_code)); std::cout << "ret = " << ret << "\n";
-
-    // CUfunction func;
-    // if (cuModuleGetFunction(&func, module, "_Z3addffPf") != CUDA_SUCCESS) {
-    //  LDLOG_ERROR("Failed to get a function");
-    //  cuCtxDetach(cuCtx);
-    //  exit(-1);
-    //}
   }
 
-  // === OptiX ============================================
+  //
+  // Initialize OptiX and launch kernel.
+  //
 
   {
     if (optixInit() != OPTIX_SUCCESS) {
@@ -201,8 +229,11 @@ int main(int argc, char** argv) {
                                       // OPTIX_EXCEPTION_FLAG_STACK_OVERFLOW;
       pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
 
-      const std::string ptx;  // = sutil::getPtxString(OPTIX_SAMPLE_NAME,
-                              // OPTIX_SAMPLE_DIR, "draw_solid_color.cu");
+      std::string ptx;
+      if (!LoadPTXFromFile(ptx_filename, &ptx)) {
+        std::cerr << "Failed to open/read PTX file: " << ptx_filename << "\n";
+        exit(-1);
+      }
       size_t sizeof_log = sizeof(logbuf);
 
       OPTIX_CHECK_LOG(optixModuleCreateFromPTX(
@@ -295,48 +326,27 @@ int main(int argc, char** argv) {
     {
       CUdeviceptr raygen_record;
       const size_t raygen_record_size = sizeof(RayGenSbtRecord);
-      // CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &raygen_record ),
-      // raygen_record_size ) );
       CUDAAllocDeviceMem(&raygen_record, raygen_record_size);
       RayGenSbtRecord rg_sbt;
       OPTIX_CHECK(optixSbtRecordPackHeader(raygen_prog_group, &rg_sbt));
       rg_sbt.data = {0.462f, 0.725f, 0.f};
 
-      // CUDA_CHECK( cudaMemcpy(
-      //            reinterpret_cast<void*>( raygen_record ),
-      //            &rg_sbt,
-      //            raygen_record_size,
-      //            cudaMemcpyHostToDevice
-      //            ) );
+      CU_CHECK(cuMemcpyHtoD(raygen_record, &rg_sbt, raygen_record_size));
 
       CUdeviceptr miss_record;
       size_t miss_record_size = sizeof(MissSbtRecord);
-      // CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &miss_record ),
-      // miss_record_size ) );
       CUDAAllocDeviceMem(&miss_record, miss_record_size);
       RayGenSbtRecord ms_sbt;
       OPTIX_CHECK(optixSbtRecordPackHeader(miss_prog_group, &ms_sbt));
 
-      // CUDA_CHECK( cudaMemcpy(
-      //            reinterpret_cast<void*>( miss_record ),
-      //            &ms_sbt,
-      //            miss_record_size,
-      //            cudaMemcpyHostToDevice
-      //            ) );
+      CU_CHECK(cuMemcpyHtoD(miss_record, &ms_sbt, miss_record_size));
 
       CUdeviceptr hitgroup_record;
       size_t hitgroup_record_size = sizeof(HitGroupSbtRecord);
-      // CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &hitgroup_record ),
-      // hitgroup_record_size ) );
       CUDAAllocDeviceMem(&hitgroup_record, hitgroup_record_size);
       RayGenSbtRecord hg_sbt;
       OPTIX_CHECK(optixSbtRecordPackHeader(hitgroup_prog_group, &hg_sbt));
-      // CUDA_CHECK( cudaMemcpy(
-      //            reinterpret_cast<void*>( hitgroup_record ),
-      //            &hg_sbt,
-      //            hitgroup_record_size,
-      //            cudaMemcpyHostToDevice
-      //            ) );
+      CU_CHECK(cuMemcpyHtoD(hitgroup_record, &hg_sbt, hitgroup_record_size));
 
       sbt.raygenRecord = raygen_record;
       sbt.missRecordBase = miss_record;
@@ -349,42 +359,59 @@ int main(int argc, char** argv) {
 
     int width = 512;
     int height = 512;
+    CUdeviceptr d_image;  // size = uchar4 * width * height
+    CUDAAllocDeviceMem(&d_image, 4 * width * height);
 
     //
     // launch
     //
+    Params params;
     {
       CUstream stream;
-      // CUDA_CHECK( cudaStreamCreate( &stream ) );
       CU_CHECK(cuStreamCreate(&stream, CU_STREAM_DEFAULT));
 
-      Params params;
-      // params.image       = output_buffer.map();
-      // params.image_width = width;
+      params.image = d_image;
+      params.image_width = width;
 
       CUdeviceptr d_param;
-      // CUDA_CHECK( cudaMalloc( reinterpret_cast<void**>( &d_param ), sizeof(
-      // Params ) ) ); CUDA_CHECK( cudaMemcpy(
-      //            reinterpret_cast<void*>( d_param ),
-      //            &params, sizeof( params ),
-      //            cudaMemcpyHostToDevice
-      //            ) );
+      CUDAAllocDeviceMem(&d_param, sizeof(Params));
+      CU_CHECK(cuMemcpyHtoD(d_param, &params, sizeof(params)));
 
       OPTIX_CHECK(optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt,
                               width, height, /*depth=*/1));
-      // CUDA_SYNC_CHECK();
 
-      // output_buffer.unmap();
+      CU_SYNC_CHECK();
+
+      std::cout << "Launch OK!\n";
+    }
+
+    //
+    // Readback result.
+    //
+    std::vector<uint8_t> h_image;
+    h_image.resize(4 * width * height);
+
+    CU_CHECK(cuMemcpyDtoH(reinterpret_cast<void *>(h_image.data()), params.image, h_image.size()));
+
+
+    //
+    // Save result to a file.
+    //
+    {
+      int n = stbi_write_png("output.png", width, height, /* comp */4, h_image.data(), /* stride */0);
+      if (n < 1) {
+        std::cerr << "Failed to write PNG image.\n";
+        exit(-1);
+      }
     }
 
     //
     // Cleanup
     //
     {
-      // CUDA_CHECK( cudaFree( reinterpret_cast<void*>( sbt.raygenRecord       )
-      // ) ); CUDA_CHECK( cudaFree( reinterpret_cast<void*>( sbt.missRecordBase
-      // ) ) ); CUDA_CHECK( cudaFree( reinterpret_cast<void*>(
-      // sbt.hitgroupRecordBase ) ) );
+      CU_CHECK(cuMemFree(sbt.raygenRecord));
+      CU_CHECK(cuMemFree(sbt.missRecordBase));
+      CU_CHECK(cuMemFree(sbt.hitgroupRecordBase));
 
       OPTIX_CHECK(optixPipelineDestroy(pipeline));
       OPTIX_CHECK(optixProgramGroupDestroy(hitgroup_prog_group));
