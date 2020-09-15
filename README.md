@@ -21,10 +21,10 @@ Minimal dependency OptiX sample.
 ## Compile a shader
 
 ```
-cd <optix_sdk>/SDK/optixHello
-nvcc --ptx -I../../include -I../ draw_solid_color.cu
+cd <optix_sdk>/SDK/optixTriangle
+nvcc --ptx -I../../include -I../ optixTriangle.cu
 
-# copy draw_solid_color.ptx to <minioptix>/data/
+# copy optixTriangle.ptx to <minioptix>/data/
 ```
 
 ## Thrid party licenses
