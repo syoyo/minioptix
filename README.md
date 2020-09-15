@@ -18,6 +18,24 @@ Minimal dependency OptiX sample.
 * Windows 10
   * Visual Studio 2019
 
+## Build on Linux
+
+Edit path to OptiX SDK if required, then:
+
+```
+$ ./scripts/bootstrap-linux.sh
+$ cd build
+$ make
+```
+
+## Build on Windows(Visual Studio 2019)
+
+```
+> vcsetup-2019.bat
+```
+
+Then open `build/minioptix.sln` VS solution file.
+
 ## Compile a shader
 
 ```
