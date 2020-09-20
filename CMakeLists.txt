@@ -1,5 +1,5 @@
-# 3.13 = target_link_directories
-cmake_minimum_required(VERSION 3.13)
+# note: 3.13 = target_link_directories
+cmake_minimum_required(VERSION 3.12)
 
 set(MINIOPTIX_BUILD_TARGET "minioptix")
 
