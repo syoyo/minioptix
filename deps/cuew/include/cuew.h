@@ -27,7 +27,8 @@ extern "C" {
 #define CUEW_VERSION_MAJOR 2
 #define CUEW_VERSION_MINOR 0
 
-#define CUDA_VERSION 10010
+#define cuTexRefSetAddress2D cuTexRefSetAddress2D_v3
+#define CUDA_VERSION 11000
 #define CU_UUID_HAS_BEEN_DEFINED
 #define CU_IPC_HANDLE_SIZE 64
 #define CU_STREAM_LEGACY ((CUstream)0x1)
@@ -39,6 +40,10 @@ extern "C" {
 #define CU_MEMHOSTREGISTER_DEVICEMAP 0x02
 #define CU_MEMHOSTREGISTER_IOMEMORY 0x04
 #define CUDA_EXTERNAL_MEMORY_DEDICATED 0x1
+#define CUDA_EXTERNAL_SEMAPHORE_SIGNAL_SKIP_NVSCIBUF_MEMSYNC 0x01
+#define CUDA_EXTERNAL_SEMAPHORE_WAIT_SKIP_NVSCIBUF_MEMSYNC 0x02
+#define CUDA_NVSCISYNC_ATTR_SIGNAL 0x1
+#define CUDA_NVSCISYNC_ATTR_WAIT 0x2
 #define CUDA_COOPERATIVE_LAUNCH_MULTI_DEVICE_NO_PRE_LAUNCH_SYNC 0x01
 #define CUDA_COOPERATIVE_LAUNCH_MULTI_DEVICE_NO_POST_LAUNCH_SYNC 0x02
 #define CUDA_ARRAY3D_LAYERED 0x01
@@ -52,31 +57,13 @@ extern "C" {
 #define CU_TRSF_READ_AS_INTEGER 0x01
 #define CU_TRSF_NORMALIZED_COORDINATES 0x02
 #define CU_TRSF_SRGB 0x10
+#define CU_TRSF_DISABLE_TRILINEAR_OPTIMIZATION 0x20
 #define CU_LAUNCH_PARAM_END ((void*)0x00)
 #define CU_LAUNCH_PARAM_BUFFER_POINTER ((void*)0x01)
 #define CU_LAUNCH_PARAM_BUFFER_SIZE ((void*)0x02)
 #define CU_PARAM_TR_DEFAULT -1
 #define CU_DEVICE_CPU ((CUdevice)-1)
 #define CU_DEVICE_INVALID ((CUdevice)-2)
-#define CUDNN_MAJOR 7
-#define CUDNN_MINOR 6
-#define CUDNN_PATCHLEVEL 3
-#define CUDNN_VERSION (CUDNN_MAJOR * 1000 + CUDNN_MINOR * 100 + CUDNN_PATCHLEVEL)
-#define CUDNN_DIM_MAX 8
-#define CUDNN_LRN_MIN_N 1 /* minimum allowed lrnN */
-#define CUDNN_LRN_MAX_N 16 /* maximum allowed lrnN */
-#define CUDNN_LRN_MIN_K 1e-5 /* minimum allowed lrnK */
-#define CUDNN_LRN_MIN_BETA 0.01 /* minimum allowed lrnBeta */
-#define CUDNN_BN_MIN_EPSILON 0.0 /* Minimum epsilon allowed to be used in the Batch Normalization formula */
-#define CUDNN_SEQDATA_DIM_COUNT 4 /* dimension count */
-#define CUDNN_ATTN_QUERYMAP_ALL_TO_ONE 0 /* multiple Q-s map to a single (K,V) set when beam size > 1 */
-#define CUDNN_ATTN_QUERYMAP_ONE_TO_ONE (1U << 0) /* multiple Q-s map to multiple (K,V) sets when beam size > 1 */
-#define CUDNN_ATTN_DISABLE_PROJ_BIASES 0 /* no biases in attention input and output projections */
-#define CUDNN_ATTN_ENABLE_PROJ_BIASES (1U << 1) /* use biases in attention input and output projections */
-#define CUDNN_ATTN_WKIND_COUNT 8 /* Number of attention weight/bias tensors */
-#define CUDNN_SEV_ERROR_EN (1U << CUDNN_SEV_ERROR)
-#define CUDNN_SEV_WARNING_EN (1U << CUDNN_SEV_WARNING)
-#define CUDNN_SEV_INFO_EN (1U << CUDNN_SEV_INFO)
 
 /* Functions which changed 3.1 -> 3.2 for 64 bit stuff,
  * the cuda library has both the old ones for compatibility and new
@@ -134,7 +121,10 @@ extern "C" {
 #define cuMemHostRegister cuMemHostRegister_v2
 #define cuGraphicsResourceSetMapFlags cuGraphicsResourceSetMapFlags_v2
 #define cuStreamBeginCapture cuStreamBeginCapture_v2
-#define cuTexRefSetAddress2D cuTexRefSetAddress2D_v2
+#define cuDevicePrimaryCtxRelease cuDevicePrimaryCtxRelease_v2
+#define cuDevicePrimaryCtxReset cuDevicePrimaryCtxReset_v2
+#define cuDevicePrimaryCtxSetFlags cuDevicePrimaryCtxSetFlags_v2
+#define cuGraphInstantiate cuGraphInstantiate_v2
 
 /* Types. */
 #ifdef _MSC_VER
@@ -420,6 +410,16 @@ typedef enum CUdevice_attribute_enum {
   CU_DEVICE_ATTRIBUTE_HOST_REGISTER_SUPPORTED = 99,
   CU_DEVICE_ATTRIBUTE_PAGEABLE_MEMORY_ACCESS_USES_HOST_PAGE_TABLES = 100,
   CU_DEVICE_ATTRIBUTE_DIRECT_MANAGED_MEM_ACCESS_FROM_HOST = 101,
+  CU_DEVICE_ATTRIBUTE_VIRTUAL_ADDRESS_MANAGEMENT_SUPPORTED = 102,
+  CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR_SUPPORTED = 103,
+  CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_WIN32_HANDLE_SUPPORTED = 104,
+  CU_DEVICE_ATTRIBUTE_HANDLE_TYPE_WIN32_KMT_HANDLE_SUPPORTED = 105,
+  CU_DEVICE_ATTRIBUTE_MAX_BLOCKS_PER_MULTIPROCESSOR = 106,
+  CU_DEVICE_ATTRIBUTE_GENERIC_COMPRESSION_SUPPORTED = 107,
+  CU_DEVICE_ATTRIBUTE_MAX_PERSISTING_L2_CACHE_SIZE = 108,
+  CU_DEVICE_ATTRIBUTE_MAX_ACCESS_POLICY_WINDOW_SIZE = 109,
+  CU_DEVICE_ATTRIBUTE_GPU_DIRECT_RDMA_WITH_CUDA_VMM_SUPPORTED = 110,
+  CU_DEVICE_ATTRIBUTE_RESERVED_SHARED_MEMORY_PER_BLOCK = 111,
   CU_DEVICE_ATTRIBUTE_MAX,
 } CUdevice_attribute;
 
@@ -446,6 +446,12 @@ typedef enum CUpointer_attribute_enum {
   CU_POINTER_ATTRIBUTE_BUFFER_ID = 7,
   CU_POINTER_ATTRIBUTE_IS_MANAGED = 8,
   CU_POINTER_ATTRIBUTE_DEVICE_ORDINAL = 9,
+  CU_POINTER_ATTRIBUTE_IS_LEGACY_CUDA_IPC_CAPABLE = 10,
+  CU_POINTER_ATTRIBUTE_RANGE_START_ADDR = 11,
+  CU_POINTER_ATTRIBUTE_RANGE_SIZE = 12,
+  CU_POINTER_ATTRIBUTE_MAPPED = 13,
+  CU_POINTER_ATTRIBUTE_ALLOWED_HANDLE_TYPES = 14,
+  CU_POINTER_ATTRIBUTE_IS_GPU_DIRECT_RDMA_CAPABLE = 15,
 } CUpointer_attribute;
 
 typedef enum CUfunction_attribute_enum {
@@ -476,7 +482,7 @@ typedef enum CUsharedconfig_enum {
 } CUsharedconfig;
 
 typedef enum CUshared_carveout_enum {
-  CU_SHAREDMEM_CARVEOUT_DEFAULT,
+  CU_SHAREDMEM_CARVEOUT_DEFAULT = -1,
   CU_SHAREDMEM_CARVEOUT_MAX_SHARED = 100,
   CU_SHAREDMEM_CARVEOUT_MAX_L1 = 0,
 } CUshared_carveout;
@@ -550,6 +556,7 @@ typedef enum CUjit_target_enum {
   CU_TARGET_COMPUTE_70 = 70,
   CU_TARGET_COMPUTE_72 = 72,
   CU_TARGET_COMPUTE_75 = 75,
+  CU_TARGET_COMPUTE_80 = 80,
 } CUjit_target;
 
 typedef enum CUjit_fallback_enum {
@@ -604,6 +611,7 @@ typedef enum CUlimit_enum {
   CU_LIMIT_DEV_RUNTIME_SYNC_DEPTH = 0x03,
   CU_LIMIT_DEV_RUNTIME_PENDING_LAUNCH_COUNT = 0x04,
   CU_LIMIT_MAX_L2_FETCH_GRANULARITY = 0x05,
+  CU_LIMIT_PERSISTING_L2_CACHE_SIZE = 0x06,
   CU_LIMIT_MAX,
 } CUlimit;
 
@@ -615,6 +623,20 @@ typedef enum CUresourcetype_enum {
 } CUresourcetype;
 
 typedef void (CUDA_CB *CUhostFn)(void* userData);
+
+typedef enum CUaccessProperty_enum {
+  CU_ACCESS_PROPERTY_NORMAL = 0,
+  CU_ACCESS_PROPERTY_STREAMING = 1,
+  CU_ACCESS_PROPERTY_PERSISTING = 2,
+} CUaccessProperty;
+
+typedef struct CUaccessPolicyWindow_st {
+  void* base_ptr;
+  size_t num_bytes;
+  float hitRatio;
+  CUaccessProperty hitProp;
+  CUaccessProperty missProp;
+} CUaccessPolicyWindow;
 
 typedef struct CUDA_KERNEL_NODE_PARAMS_st {
   CUfunction func;
@@ -650,8 +672,24 @@ typedef enum CUgraphNodeType_enum {
   CU_GRAPH_NODE_TYPE_HOST = 3,
   CU_GRAPH_NODE_TYPE_GRAPH = 4,
   CU_GRAPH_NODE_TYPE_EMPTY = 5,
-  CU_GRAPH_NODE_TYPE_COUNT,
 } CUgraphNodeType;
+
+typedef enum CUsynchronizationPolicy_enum {
+  CU_SYNC_POLICY_AUTO = 1,
+  CU_SYNC_POLICY_SPIN = 2,
+  CU_SYNC_POLICY_YIELD = 3,
+  CU_SYNC_POLICY_BLOCKING_SYNC = 4,
+} CUsynchronizationPolicy;
+
+typedef enum CUkernelNodeAttrID_enum {
+  CU_KERNEL_NODE_ATTRIBUTE_ACCESS_POLICY_WINDOW = 1,
+  CU_KERNEL_NODE_ATTRIBUTE_COOPERATIVE = 2,
+} CUkernelNodeAttrID;
+
+typedef union CUkernelNodeAttrValue_union {
+  CUaccessPolicyWindow accessPolicyWindow;
+  int cooperative;
+} CUkernelNodeAttrValue;
 
 typedef enum CUstreamCaptureStatus_enum {
   CU_STREAM_CAPTURE_STATUS_NONE = 0,
@@ -664,6 +702,16 @@ typedef enum CUstreamCaptureMode_enum {
   CU_STREAM_CAPTURE_MODE_THREAD_LOCAL = 1,
   CU_STREAM_CAPTURE_MODE_RELAXED = 2,
 } CUstreamCaptureMode;
+
+typedef enum CUstreamAttrID_enum {
+  CU_STREAM_ATTRIBUTE_ACCESS_POLICY_WINDOW = 1,
+  CU_STREAM_ATTRIBUTE_SYNCHRONIZATION_POLICY = 3,
+} CUstreamAttrID;
+
+typedef union CUstreamAttrValue_union {
+  CUaccessPolicyWindow accessPolicyWindow;
+  CUsynchronizationPolicy syncPolicy;
+} CUstreamAttrValue;
 
 typedef enum cudaError_enum {
   CUDA_SUCCESS = 0,
@@ -739,6 +787,8 @@ typedef enum cudaError_enum {
   CUDA_ERROR_STREAM_CAPTURE_IMPLICIT = 906,
   CUDA_ERROR_CAPTURED_EVENT = 907,
   CUDA_ERROR_STREAM_CAPTURE_WRONG_THREAD = 908,
+  CUDA_ERROR_TIMEOUT = 909,
+  CUDA_ERROR_GRAPH_EXEC_UPDATE_FAILURE = 910,
   CUDA_ERROR_UNKNOWN = 999,
 } CUresult;
 
@@ -961,6 +1011,9 @@ typedef enum CUexternalMemoryHandleType_enum {
   CU_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_WIN32_KMT = 3,
   CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_HEAP = 4,
   CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D12_RESOURCE = 5,
+  CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_RESOURCE = 6,
+  CU_EXTERNAL_MEMORY_HANDLE_TYPE_D3D11_RESOURCE_KMT = 7,
+  CU_EXTERNAL_MEMORY_HANDLE_TYPE_NVSCIBUF = 8,
 } CUexternalMemoryHandleType;
 
 typedef struct CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st {
@@ -971,6 +1024,7 @@ typedef struct CUDA_EXTERNAL_MEMORY_HANDLE_DESC_st {
       void* handle;
       const void* name;
     } win32;
+    const void* nvSciBufObject;
   } handle;
   unsigned long long size;
   unsigned int flags;
@@ -996,6 +1050,10 @@ typedef enum CUexternalSemaphoreHandleType_enum {
   CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32 = 2,
   CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_WIN32_KMT = 3,
   CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D12_FENCE = 4,
+  CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D11_FENCE = 5,
+  CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_NVSCISYNC = 6,
+  CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D11_KEYED_MUTEX = 7,
+  CU_EXTERNAL_SEMAPHORE_HANDLE_TYPE_D3D11_KEYED_MUTEX_KMT = 8,
 } CUexternalSemaphoreHandleType;
 
 typedef struct CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st {
@@ -1006,6 +1064,7 @@ typedef struct CUDA_EXTERNAL_SEMAPHORE_HANDLE_DESC_st {
       void* handle;
       const void* name;
     } win32;
+    const void* nvSciSyncObj;
   } handle;
   unsigned int flags;
   unsigned int reserved[16];
@@ -1016,7 +1075,14 @@ typedef struct CUDA_EXTERNAL_SEMAPHORE_SIGNAL_PARAMS_st {
     struct {
       unsigned long long value;
     } fence;
-    unsigned int reserved[16];
+    union {
+      void* fence;
+      unsigned long long reserved;
+    } nvSciSync;
+    struct {
+      unsigned long long key;
+    } keyedMutex;
+    unsigned int reserved[12];
   } params;
   unsigned int flags;
   unsigned int reserved[16];
@@ -1027,11 +1093,89 @@ typedef struct CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS_st {
     struct {
       unsigned long long value;
     } fence;
-    unsigned int reserved[16];
+    union {
+      void* fence;
+      unsigned long long reserved;
+    } nvSciSync;
+    struct {
+      unsigned long long key;
+      unsigned int timeoutMs;
+    } keyedMutex;
+    unsigned int reserved[10];
   } params;
   unsigned int flags;
   unsigned int reserved[16];
 } CUDA_EXTERNAL_SEMAPHORE_WAIT_PARAMS;
+
+typedef unsigned long long CUmemGenericAllocationHandle;
+
+typedef enum CUmemAllocationHandleType_enum {
+  CU_MEM_HANDLE_TYPE_POSIX_FILE_DESCRIPTOR = 0x1,
+  CU_MEM_HANDLE_TYPE_WIN32 = 0x2,
+  CU_MEM_HANDLE_TYPE_WIN32_KMT = 0x4,
+  CU_MEM_HANDLE_TYPE_MAX = 0xFFFFFFFF,
+} CUmemAllocationHandleType;
+
+typedef enum CUmemAccess_flags_enum {
+  CU_MEM_ACCESS_FLAGS_PROT_NONE = 0x0,
+  CU_MEM_ACCESS_FLAGS_PROT_READ = 0x1,
+  CU_MEM_ACCESS_FLAGS_PROT_READWRITE = 0x3,
+  CU_MEM_ACCESS_FLAGS_PROT_MAX = 0xFFFFFFFF,
+} CUmemAccess_flags;
+
+typedef enum CUmemLocationType_enum {
+  CU_MEM_LOCATION_TYPE_INVALID = 0x0,
+  CU_MEM_LOCATION_TYPE_DEVICE = 0x1,
+  CU_MEM_LOCATION_TYPE_MAX = 0xFFFFFFFF,
+} CUmemLocationType;
+
+typedef enum CUmemAllocationType_enum {
+  CU_MEM_ALLOCATION_TYPE_INVALID = 0x0,
+  CU_MEM_ALLOCATION_TYPE_PINNED = 0x1,
+  CU_MEM_ALLOCATION_TYPE_MAX = 0xFFFFFFFF,
+} CUmemAllocationType;
+
+typedef enum CUmemAllocationGranularity_flags_enum {
+  CU_MEM_ALLOC_GRANULARITY_MINIMUM = 0x0,
+  CU_MEM_ALLOC_GRANULARITY_RECOMMENDED = 0x1,
+} CUmemAllocationGranularity_flags;
+
+typedef struct CUmemLocation_st {
+  CUmemLocationType type;
+  int id;
+} CUmemLocation;
+
+typedef enum CUmemAllocationCompType_enum {
+  CU_MEM_ALLOCATION_COMP_NONE = 0x0,
+  CU_MEM_ALLOCATION_COMP_GENERIC = 0x1,
+} CUmemAllocationCompType;
+
+typedef struct CUmemAllocationProp_st {
+  CUmemAllocationType type;
+  CUmemAllocationHandleType requestedHandleTypes;
+  CUmemLocation location;
+  void* win32HandleMetaData;
+  struct {
+    unsigned char compressionType;
+    unsigned char gpuDirectRDMACapable;
+    unsigned char reserved[6];
+  } allocFlags;
+} CUmemAllocationProp;
+
+typedef struct CUmemAccessDesc_st {
+  CUmemLocation location;
+  CUmemAccess_flags flags;
+} CUmemAccessDesc;
+
+typedef enum CUgraphExecUpdateResult_enum {
+  CU_GRAPH_EXEC_UPDATE_SUCCESS = 0x0,
+  CU_GRAPH_EXEC_UPDATE_ERROR = 0x1,
+  CU_GRAPH_EXEC_UPDATE_ERROR_TOPOLOGY_CHANGED = 0x2,
+  CU_GRAPH_EXEC_UPDATE_ERROR_NODE_TYPE_CHANGED = 0x3,
+  CU_GRAPH_EXEC_UPDATE_ERROR_FUNCTION_CHANGED = 0x4,
+  CU_GRAPH_EXEC_UPDATE_ERROR_PARAMETERS_CHANGED = 0x5,
+  CU_GRAPH_EXEC_UPDATE_ERROR_NOT_SUPPORTED = 0x6,
+} CUgraphExecUpdateResult;
 
 typedef enum  {
   NVRTC_SUCCESS = 0,
@@ -1066,6 +1210,7 @@ typedef enum  {
   CUDNN_STATUS_RUNTIME_PREREQUISITE_MISSING = 11,
   CUDNN_STATUS_RUNTIME_IN_PROGRESS = 12,
   CUDNN_STATUS_RUNTIME_FP_OVERFLOW = 13,
+  CUDNN_STATUS_VERSION_MISMATCH = 14,
 } cudnnStatus_t;
 
 typedef struct cudnnRuntimeTag_t cudnnRuntimeTag_t;
@@ -1083,7 +1228,6 @@ typedef enum libraryPropertyType_t {
 } libraryPropertyType;
 
 typedef struct cudnnTensorStruct* cudnnTensorDescriptor_t;
-typedef struct cudnnConvolutionStruct* cudnnConvolutionDescriptor_t;
 typedef struct cudnnPoolingStruct* cudnnPoolingDescriptor_t;
 typedef struct cudnnFilterStruct* cudnnFilterDescriptor_t;
 typedef struct cudnnLRNStruct* cudnnLRNDescriptor_t;
@@ -1110,6 +1254,7 @@ typedef enum  {
   CUDNN_DEFAULT_MATH = 0,
   CUDNN_TENSOR_OP_MATH = 1,
   CUDNN_TENSOR_OP_MATH_ALLOW_CONVERSION = 2,
+  CUDNN_FMA_MATH = 3,
 } cudnnMathType_t;
 
 typedef enum  {
@@ -1121,11 +1266,6 @@ typedef enum  {
   CUDNN_NON_DETERMINISTIC = 0,
   CUDNN_DETERMINISTIC = 1,
 } cudnnDeterminism_t;
-
-typedef enum  {
-  CUDNN_DEFAULT_REORDER = 0,
-  CUDNN_NO_REORDER = 1,
-} cudnnReorderType_t;
 
 typedef enum  {
   CUDNN_TENSOR_NCHW = 0,
@@ -1170,92 +1310,6 @@ typedef enum  {
   CUDNN_16BIT_INDICES = 2,
   CUDNN_8BIT_INDICES = 3,
 } cudnnIndicesType_t;
-
-typedef enum  {
-  CUDNN_CONVOLUTION = 0,
-  CUDNN_CROSS_CORRELATION = 1,
-} cudnnConvolutionMode_t;
-
-typedef enum  {
-  CUDNN_CONVOLUTION_FWD_NO_WORKSPACE = 0,
-  CUDNN_CONVOLUTION_FWD_PREFER_FASTEST = 1,
-  CUDNN_CONVOLUTION_FWD_SPECIFY_WORKSPACE_LIMIT = 2,
-} cudnnConvolutionFwdPreference_t;
-
-typedef enum  {
-  CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM = 0,
-  CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM = 1,
-  CUDNN_CONVOLUTION_FWD_ALGO_GEMM = 2,
-  CUDNN_CONVOLUTION_FWD_ALGO_DIRECT = 3,
-  CUDNN_CONVOLUTION_FWD_ALGO_FFT = 4,
-  CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING = 5,
-  CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD = 6,
-  CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED = 7,
-  CUDNN_CONVOLUTION_FWD_ALGO_COUNT = 8,
-} cudnnConvolutionFwdAlgo_t;
-
-typedef struct {
-  cudnnConvolutionFwdAlgo_t algo;
-  cudnnStatus_t status;
-  float time;
-  size_t memory;
-  cudnnDeterminism_t determinism;
-  cudnnMathType_t mathType;
-  int reserved[3];
-} cudnnConvolutionFwdAlgoPerf_t;
-
-typedef enum  {
-  CUDNN_CONVOLUTION_BWD_FILTER_NO_WORKSPACE = 0,
-  CUDNN_CONVOLUTION_BWD_FILTER_PREFER_FASTEST = 1,
-  CUDNN_CONVOLUTION_BWD_FILTER_SPECIFY_WORKSPACE_LIMIT = 2,
-} cudnnConvolutionBwdFilterPreference_t;
-
-typedef enum  {
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0 = 0,
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1 = 1,
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT = 2,
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_3 = 3,
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD = 4,
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD_NONFUSED = 5,
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT_TILING = 6,
-  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_COUNT = 7,
-} cudnnConvolutionBwdFilterAlgo_t;
-
-typedef struct {
-  cudnnConvolutionBwdFilterAlgo_t algo;
-  cudnnStatus_t status;
-  float time;
-  size_t memory;
-  cudnnDeterminism_t determinism;
-  cudnnMathType_t mathType;
-  int reserved[3];
-} cudnnConvolutionBwdFilterAlgoPerf_t;
-
-typedef enum  {
-  CUDNN_CONVOLUTION_BWD_DATA_NO_WORKSPACE = 0,
-  CUDNN_CONVOLUTION_BWD_DATA_PREFER_FASTEST = 1,
-  CUDNN_CONVOLUTION_BWD_DATA_SPECIFY_WORKSPACE_LIMIT = 2,
-} cudnnConvolutionBwdDataPreference_t;
-
-typedef enum  {
-  CUDNN_CONVOLUTION_BWD_DATA_ALGO_0 = 0,
-  CUDNN_CONVOLUTION_BWD_DATA_ALGO_1 = 1,
-  CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT = 2,
-  CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING = 3,
-  CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD = 4,
-  CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD_NONFUSED = 5,
-  CUDNN_CONVOLUTION_BWD_DATA_ALGO_COUNT = 6,
-} cudnnConvolutionBwdDataAlgo_t;
-
-typedef struct {
-  cudnnConvolutionBwdDataAlgo_t algo;
-  cudnnStatus_t status;
-  float time;
-  size_t memory;
-  cudnnDeterminism_t determinism;
-  cudnnMathType_t mathType;
-  int reserved[3];
-} cudnnConvolutionBwdDataAlgoPerf_t;
 
 typedef enum  {
   CUDNN_SOFTMAX_FAST = 0,
@@ -1305,10 +1359,61 @@ typedef enum  {
 } cudnnBatchNormOps_t;
 
 typedef enum  {
+  CUDNN_NORM_PER_ACTIVATION = 0,
+  CUDNN_NORM_PER_CHANNEL = 1,
+} cudnnNormMode_t;
+
+typedef enum  {
+  CUDNN_NORM_ALGO_STANDARD = 0,
+  CUDNN_NORM_ALGO_PERSIST = 1,
+} cudnnNormAlgo_t;
+
+typedef enum  {
+  CUDNN_NORM_OPS_NORM = 0,
+  CUDNN_NORM_OPS_NORM_ACTIVATION = 1,
+  CUDNN_NORM_OPS_NORM_ADD_ACTIVATION = 2,
+} cudnnNormOps_t;
+
+typedef enum  {
   CUDNN_SAMPLER_BILINEAR = 0,
 } cudnnSamplerType_t;
 
 typedef struct cudnnDropoutStruct* cudnnDropoutDescriptor_t;
+typedef struct cudnnAlgorithmStruct* cudnnAlgorithmDescriptor_t;
+typedef struct cudnnAlgorithmPerformanceStruct* cudnnAlgorithmPerformance_t;
+
+typedef enum  {
+  CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_GEMM = 0,
+  CUDNN_CONVOLUTION_FWD_ALGO_IMPLICIT_PRECOMP_GEMM = 1,
+  CUDNN_CONVOLUTION_FWD_ALGO_GEMM = 2,
+  CUDNN_CONVOLUTION_FWD_ALGO_DIRECT = 3,
+  CUDNN_CONVOLUTION_FWD_ALGO_FFT = 4,
+  CUDNN_CONVOLUTION_FWD_ALGO_FFT_TILING = 5,
+  CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD = 6,
+  CUDNN_CONVOLUTION_FWD_ALGO_WINOGRAD_NONFUSED = 7,
+  CUDNN_CONVOLUTION_FWD_ALGO_COUNT = 8,
+} cudnnConvolutionFwdAlgo_t;
+
+typedef enum  {
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_0 = 0,
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_1 = 1,
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT = 2,
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_3 = 3,
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD = 4,
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_WINOGRAD_NONFUSED = 5,
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_FFT_TILING = 6,
+  CUDNN_CONVOLUTION_BWD_FILTER_ALGO_COUNT = 7,
+} cudnnConvolutionBwdFilterAlgo_t;
+
+typedef enum  {
+  CUDNN_CONVOLUTION_BWD_DATA_ALGO_0 = 0,
+  CUDNN_CONVOLUTION_BWD_DATA_ALGO_1 = 1,
+  CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT = 2,
+  CUDNN_CONVOLUTION_BWD_DATA_ALGO_FFT_TILING = 3,
+  CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD = 4,
+  CUDNN_CONVOLUTION_BWD_DATA_ALGO_WINOGRAD_NONFUSED = 5,
+  CUDNN_CONVOLUTION_BWD_DATA_ALGO_COUNT = 6,
+} cudnnConvolutionBwdDataAlgo_t;
 
 typedef enum  {
   CUDNN_RNN_ALGO_STANDARD = 0,
@@ -1316,6 +1421,49 @@ typedef enum  {
   CUDNN_RNN_ALGO_PERSIST_DYNAMIC = 2,
   CUDNN_RNN_ALGO_COUNT = 3,
 } cudnnRNNAlgo_t;
+
+typedef enum  {
+  CUDNN_CTC_LOSS_ALGO_DETERMINISTIC = 0,
+  CUDNN_CTC_LOSS_ALGO_NON_DETERMINISTIC = 1,
+} cudnnCTCLossAlgo_t;
+
+typedef struct {
+  union Algorithm {
+    cudnnConvolutionFwdAlgo_t convFwdAlgo;
+    cudnnConvolutionBwdFilterAlgo_t convBwdFilterAlgo;
+    cudnnConvolutionBwdDataAlgo_t convBwdDataAlgo;
+    cudnnRNNAlgo_t RNNAlgo;
+    cudnnCTCLossAlgo_t CTCLossAlgo;
+  } algo;
+} cudnnAlgorithm_t;
+
+typedef enum  {
+  CUDNN_SEV_FATAL = 0,
+  CUDNN_SEV_ERROR = 1,
+  CUDNN_SEV_WARNING = 2,
+  CUDNN_SEV_INFO = 3,
+} cudnnSeverity_t;
+
+typedef struct {
+  unsigned cudnn_version;
+  cudnnStatus_t cudnnStatus;
+  unsigned time_sec;
+  unsigned time_usec;
+  unsigned time_delta;
+  cudnnHandle_t handle;
+  cudaStream_t stream;
+  unsigned long long pid;
+  unsigned long long tid;
+  int cudaDeviceId;
+  int reserved[15];
+} cudnnDebug_t;
+
+typedef void (CUDA_CB *cudnnCallback_t)(cudnnSeverity_t sev, void* udata, const cudnnDebug_t* dbg, const char* msg);
+
+typedef enum  {
+  CUDNN_FWD_MODE_INFERENCE = 0,
+  CUDNN_FWD_MODE_TRAINING = 1,
+} cudnnForwardMode_t;
 
 typedef enum  {
   CUDNN_RNN_RELU = 0,
@@ -1352,16 +1500,10 @@ typedef enum  {
   CUDNN_RNN_DATA_LAYOUT_BATCH_MAJOR_UNPACKED = 2,
 } cudnnRNNDataLayout_t;
 
-typedef enum  {
-  CUDNN_RNN_PADDED_IO_DISABLED = 0,
-  CUDNN_RNN_PADDED_IO_ENABLED = 1,
-} cudnnRNNPaddingMode_t;
-
+typedef unsigned cudnnRNNPaddingMode_t;
 typedef struct cudnnRNNStruct* cudnnRNNDescriptor_t;
 typedef struct cudnnPersistentRNNPlan* cudnnPersistentRNNPlan_t;
 typedef struct cudnnRNNDataStruct* cudnnRNNDataDescriptor_t;
-typedef struct cudnnAlgorithmStruct* cudnnAlgorithmDescriptor_t;
-typedef struct cudnnAlgorithmPerformanceStruct* cudnnAlgorithmPerformance_t;
 
 typedef enum  {
   CUDNN_SEQDATA_TIME_DIM = 0,
@@ -1391,47 +1533,42 @@ typedef enum  {
 } cudnnWgradMode_t;
 
 typedef enum  {
-  CUDNN_CTC_LOSS_ALGO_DETERMINISTIC = 0,
-  CUDNN_CTC_LOSS_ALGO_NON_DETERMINISTIC = 1,
-} cudnnCTCLossAlgo_t;
-
-typedef enum  {
   CUDNN_LOSS_NORMALIZATION_NONE = 0,
   CUDNN_LOSS_NORMALIZATION_SOFTMAX = 1,
 } cudnnLossNormalizationMode_t;
 
-typedef struct {
-  union Algorithm {
-    cudnnConvolutionFwdAlgo_t convFwdAlgo;
-    cudnnConvolutionBwdFilterAlgo_t convBwdFilterAlgo;
-    cudnnConvolutionBwdDataAlgo_t convBwdDataAlgo;
-    cudnnRNNAlgo_t RNNAlgo;
-    cudnnCTCLossAlgo_t CTCLossAlgo;
-  } algo;
-} cudnnAlgorithm_t;
+typedef struct cudnnConvolutionStruct* cudnnConvolutionDescriptor_t;
 
 typedef enum  {
-  CUDNN_SEV_FATAL = 0,
-  CUDNN_SEV_ERROR = 1,
-  CUDNN_SEV_WARNING = 2,
-  CUDNN_SEV_INFO = 3,
-} cudnnSeverity_t;
+  CUDNN_CONVOLUTION = 0,
+  CUDNN_CROSS_CORRELATION = 1,
+} cudnnConvolutionMode_t;
+
+typedef enum  {
+  CUDNN_DEFAULT_REORDER = 0,
+  CUDNN_NO_REORDER = 1,
+} cudnnReorderType_t;
 
 typedef struct {
-  unsigned cudnn_version;
-  cudnnStatus_t cudnnStatus;
-  unsigned time_sec;
-  unsigned time_usec;
-  unsigned time_delta;
-  cudnnHandle_t handle;
-  cudaStream_t stream;
-  unsigned long long pid;
-  unsigned long long tid;
-  int cudaDeviceId;
-  int reserved[15];
-} cudnnDebug_t;
+  cudnnConvolutionFwdAlgo_t algo;
+  cudnnStatus_t status;
+  float time;
+  size_t memory;
+  cudnnDeterminism_t determinism;
+  cudnnMathType_t mathType;
+  int reserved[3];
+} cudnnConvolutionFwdAlgoPerf_t;
 
-typedef void (CUDA_CB *cudnnCallback_t)(cudnnSeverity_t sev, void* udata, const cudnnDebug_t* dbg, const char* msg);
+typedef struct {
+  cudnnConvolutionBwdDataAlgo_t algo;
+  cudnnStatus_t status;
+  float time;
+  size_t memory;
+  cudnnDeterminism_t determinism;
+  cudnnMathType_t mathType;
+  int reserved[3];
+} cudnnConvolutionBwdDataAlgoPerf_t;
+
 typedef struct cudnnFusedOpsConstParamStruct* cudnnFusedOpsConstParamPack_t;
 typedef struct cudnnFusedOpsVariantParamStruct* cudnnFusedOpsVariantParamPack_t;
 typedef struct cudnnFusedOpsPlanStruct* cudnnFusedOpsPlan_t;
@@ -1525,6 +1662,213 @@ typedef enum  {
   CUDNN_SCALAR_DOUBLE_BN_EPSILON = 103,
 } cudnnFusedOpsVariantParamLabel_t;
 
+typedef struct {
+  cudnnConvolutionBwdFilterAlgo_t algo;
+  cudnnStatus_t status;
+  float time;
+  size_t memory;
+  cudnnDeterminism_t determinism;
+  cudnnMathType_t mathType;
+  int reserved[3];
+} cudnnConvolutionBwdFilterAlgoPerf_t;
+
+typedef void* cudnnBackendDescriptor_t;
+
+typedef enum  {
+  CUDNN_POINTWISE_ADD = 0,
+  CUDNN_POINTWISE_MUL = 1,
+  CUDNN_POINTWISE_MIN = 2,
+  CUDNN_POINTWISE_MAX = 3,
+  CUDNN_POINTWISE_SQRT = 4,
+  CUDNN_POINTWISE_RELU_FWD = 100,
+  CUDNN_POINTWISE_TANH_FWD = 101,
+  CUDNN_POINTWISE_SIGMOID_FWD = 102,
+  CUDNN_POINTWISE_ELU_FWD = 103,
+} cudnnPointwiseMode_t;
+
+typedef enum  {
+  CUDNN_GENSTATS_SUM_SQSUM = 0,
+} cudnnGenStatsMode_t;
+
+typedef enum  {
+  CUDNN_ATTR_POINTWISE_MODE = 0,
+  CUDNN_ATTR_POINTWISE_MATH_PREC = 1,
+  CUDNN_ATTR_POINTWISE_NAN_PROPAGATION = 2,
+  CUDNN_ATTR_POINTWISE_RELU_LOWER_CLIP = 3,
+  CUDNN_ATTR_POINTWISE_RELU_UPPER_CLIP = 4,
+  CUDNN_ATTR_CONVOLUTION_COMP_TYPE = 100,
+  CUDNN_ATTR_CONVOLUTION_CONV_MODE = 101,
+  CUDNN_ATTR_CONVOLUTION_DILATIONS = 102,
+  CUDNN_ATTR_CONVOLUTION_FILTER_STRIDES = 103,
+  CUDNN_ATTR_CONVOLUTION_POST_PADDINGS = 104,
+  CUDNN_ATTR_CONVOLUTION_PRE_PADDINGS = 105,
+  CUDNN_ATTR_CONVOLUTION_SPATIAL_DIMS = 106,
+  CUDNN_ATTR_ENGINEHEUR_MODE = 200,
+  CUDNN_ATTR_ENGINEHEUR_OPERATION_GRAPH = 201,
+  CUDNN_ATTR_ENGINEHEUR_RESULTS = 202,
+  CUDNN_ATTR_ENGINECFG_ENGINE = 300,
+  CUDNN_ATTR_ENGINECFG_INTERMEDIATE_INFO = 301,
+  CUDNN_ATTR_ENGINECFG_KNOB_CHOICES = 302,
+  CUDNN_ATTR_EXECUTION_PLAN_HANDLE = 400,
+  CUDNN_ATTR_EXECUTION_PLAN_ENGINE_CONFIG = 401,
+  CUDNN_ATTR_EXECUTION_PLAN_WORKSPACE_SIZE = 402,
+  CUDNN_ATTR_EXECUTION_PLAN_COMPUTED_INTERMEDIATE_UIDS = 403,
+  CUDNN_ATTR_EXECUTION_PLAN_RUN_ONLY_INTERMEDIATE_UIDS = 404,
+  CUDNN_ATTR_INTERMEDIATE_INFO_UNIQUE_ID = 500,
+  CUDNN_ATTR_INTERMEDIATE_INFO_SIZE = 501,
+  CUDNN_ATTR_INTERMEDIATE_INFO_DEPENDENT_DATA_UIDS = 502,
+  CUDNN_ATTR_INTERMEDIATE_INFO_DEPENDENT_ATTRIBUTES = 503,
+  CUDNN_ATTR_KNOB_CHOICE_KNOB_TYPE = 600,
+  CUDNN_ATTR_KNOB_CHOICE_KNOB_VALUE = 601,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_ALPHA = 700,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_BETA = 701,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_CONV_DESC = 702,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_W = 703,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_X = 704,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_FORWARD_Y = 705,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_ALPHA = 706,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_BETA = 707,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_CONV_DESC = 708,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_W = 709,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DX = 710,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_DATA_DY = 711,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_ALPHA = 712,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_BETA = 713,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_CONV_DESC = 714,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DW = 715,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_X = 716,
+  CUDNN_ATTR_OPERATION_CONVOLUTION_BWD_FILTER_DY = 717,
+  CUDNN_ATTR_OPERATION_POINTWISE_PW_DESCRIPTOR = 750,
+  CUDNN_ATTR_OPERATION_POINTWISE_XDESC = 751,
+  CUDNN_ATTR_OPERATION_POINTWISE_BDESC = 752,
+  CUDNN_ATTR_OPERATION_POINTWISE_YDESC = 753,
+  CUDNN_ATTR_OPERATION_POINTWISE_ALPHA1 = 754,
+  CUDNN_ATTR_OPERATION_POINTWISE_ALPHA2 = 755,
+  CUDNN_ATTR_OPERATION_GENSTATS_MODE = 770,
+  CUDNN_ATTR_OPERATION_GENSTATS_MATH_PREC = 771,
+  CUDNN_ATTR_OPERATION_GENSTATS_XDESC = 772,
+  CUDNN_ATTR_OPERATION_GENSTATS_SUMDESC = 773,
+  CUDNN_ATTR_OPERATION_GENSTATS_SQSUMDESC = 774,
+  CUDNN_ATTR_OPERATIONGRAPH_HANDLE = 800,
+  CUDNN_ATTR_OPERATIONGRAPH_OPS = 801,
+  CUDNN_ATTR_OPERATIONGRAPH_ENGINE_GLOBAL_COUNT = 802,
+  CUDNN_ATTR_TENSOR_BYTE_ALIGNMENT = 900,
+  CUDNN_ATTR_TENSOR_DATA_TYPE = 901,
+  CUDNN_ATTR_TENSOR_DIMENSIONS = 902,
+  CUDNN_ATTR_TENSOR_STRIDES = 903,
+  CUDNN_ATTR_TENSOR_VECTOR_COUNT = 904,
+  CUDNN_ATTR_TENSOR_VECTORIZED_DIMENSION = 905,
+  CUDNN_ATTR_TENSOR_UNIQUE_ID = 906,
+  CUDNN_ATTR_TENSOR_IS_VIRTUAL = 907,
+  CUDNN_ATTR_VARIANT_PACK_UNIQUE_IDS = 1000,
+  CUDNN_ATTR_VARIANT_PACK_DATA_POINTERS = 1001,
+  CUDNN_ATTR_VARIANT_PACK_INTERMEDIATES = 1002,
+  CUDNN_ATTR_VARIANT_PACK_WORKSPACE = 1003,
+  CUDNN_ATTR_LAYOUT_INFO_TENSOR_UID = 1100,
+  CUDNN_ATTR_LAYOUT_INFO_TYPES = 1101,
+  CUDNN_ATTR_KNOB_INFO_TYPE = 1200,
+  CUDNN_ATTR_KNOB_INFO_MAXIMUM_VALUE = 1201,
+  CUDNN_ATTR_KNOB_INFO_MINIMUM_VALUE = 1202,
+  CUDNN_ATTR_KNOB_INFO_STRIDE = 1203,
+  CUDNN_ATTR_ENGINE_OPERATION_GRAPH = 1300,
+  CUDNN_ATTR_ENGINE_GLOBAL_INDEX = 1301,
+  CUDNN_ATTR_ENGINE_KNOB_INFO = 1302,
+  CUDNN_ATTR_ENGINE_NUMERICAL_NOTE = 1303,
+  CUDNN_ATTR_ENGINE_LAYOUT_INFO = 1304,
+} cudnnBackendAttributeName_t;
+
+typedef enum  {
+  CUDNN_TYPE_HANDLE = 0,
+  CUDNN_TYPE_DATA_TYPE,
+  CUDNN_TYPE_BOOLEAN,
+  CUDNN_TYPE_INT64,
+  CUDNN_TYPE_FLOAT,
+  CUDNN_TYPE_DOUBLE,
+  CUDNN_TYPE_VOID_PTR,
+  CUDNN_TYPE_CONVOLUTION_MODE,
+  CUDNN_TYPE_HEUR_MODE,
+  CUDNN_TYPE_KNOB_TYPE,
+  CUDNN_TYPE_NAN_PROPOGATION,
+  CUDNN_TYPE_NUMERICAL_NOTE,
+  CUDNN_TYPE_LAYOUT_TYPE,
+  CUDNN_TYPE_ATTRIB_NAME,
+  CUDNN_TYPE_POINTWISE_MODE,
+  CUDNN_TYPE_BACKEND_DESCRIPTOR,
+  CUDNN_TYPE_GENSTATS_MODE,
+} cudnnBackendAttributeType_t;
+
+typedef enum  {
+  CUDNN_BACKEND_POINTWISE_DESCRIPTOR = 0,
+  CUDNN_BACKEND_CONVOLUTION_DESCRIPTOR,
+  CUDNN_BACKEND_ENGINE_DESCRIPTOR,
+  CUDNN_BACKEND_ENGINECFG_DESCRIPTOR,
+  CUDNN_BACKEND_ENGINEHEUR_DESCRIPTOR,
+  CUDNN_BACKEND_EXECUTION_PLAN_DESCRIPTOR,
+  CUDNN_BACKEND_INTERMEDIATE_INFO_DESCRIPTOR,
+  CUDNN_BACKEND_KNOB_CHOICE_DESCRIPTOR,
+  CUDNN_BACKEND_KNOB_INFO_DESCRIPTOR,
+  CUDNN_BACKEND_LAYOUT_INFO_DESCRIPTOR,
+  CUDNN_BACKEND_OPERATION_CONVOLUTION_FORWARD_DESCRIPTOR,
+  CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_FILTER_DESCRIPTOR,
+  CUDNN_BACKEND_OPERATION_CONVOLUTION_BACKWARD_DATA_DESCRIPTOR,
+  CUDNN_BACKEND_OPERATION_POINTWISE_DESCRIPTOR,
+  CUDNN_BACKEND_OPERATION_GEN_STATS_DESCRIPTOR,
+  CUDNN_BACKEND_OPERATIONGRAPH_DESCRIPTOR,
+  CUDNN_BACKEND_VARIANT_PACK_DESCRIPTOR,
+  CUDNN_BACKEND_TENSOR_DESCRIPTOR,
+} cudnnBackendDescriptorType_t;
+
+typedef enum  {
+  CUDNN_NUMERICAL_NOTE_TENSOR_CORE = 0,
+  CUDNN_NUMERICAL_NOTE_DOWN_CONVERT_INPUTS,
+  CUDNN_NUMERICAL_NOTE_REDUCED_PRECISION_REDUCTION,
+  CUDNN_NUMERICAL_NOTE_FFT,
+  CUDNN_NUMERICAL_NOTE_NONDETERMINISTIC,
+  CUDNN_NUMERICAL_NOTE_WINOGRAD,
+  CUDNN_NUMERICAL_NOTE_TYPE_COUNT,
+} cudnnBackendNumericalNote_t;
+
+typedef enum  {
+  CUDNN_KNOB_TYPE_SPLIT_K = 0,
+  CUDNN_KNOB_TYPE_SWIZZLE = 1,
+  CUDNN_KNOB_TYPE_TILE_SIZE = 2,
+  CUDNN_KNOB_TYPE_USE_TEX = 3,
+  CUDNN_KNOB_TYPE_EDGE = 4,
+  CUDNN_KNOB_TYPE_KBLOCK = 5,
+  CUDNN_KNOB_TYPE_LDGA = 6,
+  CUDNN_KNOB_TYPE_LDGB = 7,
+  CUDNN_KNOB_TYPE_CHUNK_K = 8,
+  CUDNN_KNOB_TYPE_SPLIT_H = 9,
+  CUDNN_KNOB_TYPE_WINO_TILE = 10,
+  CUDNN_KNOB_TYPE_MULTIPLY = 11,
+  CUDNN_KNOB_TYPE_SPLIT_K_BUF = 12,
+  CUDNN_KNOB_TYPE_TILEK = 13,
+  CUDNN_KNOB_TYPE_STAGES = 14,
+  CUDNN_KNOB_TYPE_REDUCTION_MODE = 15,
+  CUDNN_KNOB_TYPE_CTA_SPLIT_K_MODE = 16,
+  CUDNN_KNOB_TYPE_SPLIT_K_SLC = 17,
+  CUDNN_KNOB_TYPE_IDX_MODE = 18,
+  CUDNN_KNOB_TYPE_SLICED = 19,
+  CUDNN_KNOB_TYPE_SPLIT_RS = 20,
+  CUDNN_KNOB_TYPE_SINGLEBUFFER = 21,
+  CUDNN_KNOB_TYPE_LDGC = 22,
+  CUDNN_KNOB_TYPE_SPECFILT = 23,
+  CUDNN_KNOB_TYPE_COUNTS = 24,
+} cudnnBackendKnobType_t;
+
+typedef enum  {
+  CUDNN_LAYOUT_TYPE_PREFERRED_NCHW = 0,
+  CUDNN_LAYOUT_TYPE_PREFERRED_NHWC = 1,
+  CUDNN_LAYOUT_TYPE_PREFERRED_PAD4CK = 2,
+  CUDNN_LAYOUT_TYPE_PREFERRED_PAD8CK = 3,
+  CUDNN_LAYOUT_TYPE_COUNT = 4,
+} cudnnBackendLayoutType_t;
+
+typedef enum  {
+  CUDNN_HEUR_MODE_INSTANT = 0,
+  CUDNN_HEUR_MODES_COUNT,
+} cudnnBackendHeurMode_t;
+
 
 /* Function types. */
 typedef CUresult CUDAAPI tcuGetErrorString(CUresult error, const char** pStr);
@@ -1537,13 +1881,14 @@ typedef CUresult CUDAAPI tcuDeviceGetName(char* name, int len, CUdevice dev);
 typedef CUresult CUDAAPI tcuDeviceGetUuid(CUuuid* uuid, CUdevice dev);
 typedef CUresult CUDAAPI tcuDeviceTotalMem_v2(size_t* bytes, CUdevice dev);
 typedef CUresult CUDAAPI tcuDeviceGetAttribute(int* pi, CUdevice_attribute attrib, CUdevice dev);
+typedef CUresult CUDAAPI tcuDeviceGetNvSciSyncAttributes(void* nvSciSyncAttrList, CUdevice dev, int flags);
 typedef CUresult CUDAAPI tcuDeviceGetProperties(CUdevprop* prop, CUdevice dev);
 typedef CUresult CUDAAPI tcuDeviceComputeCapability(int* major, int* minor, CUdevice dev);
 typedef CUresult CUDAAPI tcuDevicePrimaryCtxRetain(CUcontext* pctx, CUdevice dev);
-typedef CUresult CUDAAPI tcuDevicePrimaryCtxRelease(CUdevice dev);
-typedef CUresult CUDAAPI tcuDevicePrimaryCtxSetFlags(CUdevice dev, unsigned int flags);
+typedef CUresult CUDAAPI tcuDevicePrimaryCtxRelease_v2(CUdevice dev);
+typedef CUresult CUDAAPI tcuDevicePrimaryCtxSetFlags_v2(CUdevice dev, unsigned int flags);
 typedef CUresult CUDAAPI tcuDevicePrimaryCtxGetState(CUdevice dev, unsigned int* flags, int* active);
-typedef CUresult CUDAAPI tcuDevicePrimaryCtxReset(CUdevice dev);
+typedef CUresult CUDAAPI tcuDevicePrimaryCtxReset_v2(CUdevice dev);
 typedef CUresult CUDAAPI tcuCtxCreate_v2(CUcontext* pctx, unsigned int flags, CUdevice dev);
 typedef CUresult CUDAAPI tcuCtxDestroy_v2(CUcontext ctx);
 typedef CUresult CUDAAPI tcuCtxPushCurrent_v2(CUcontext ctx);
@@ -1561,6 +1906,7 @@ typedef CUresult CUDAAPI tcuCtxGetSharedMemConfig(CUsharedconfig* pConfig);
 typedef CUresult CUDAAPI tcuCtxSetSharedMemConfig(CUsharedconfig config);
 typedef CUresult CUDAAPI tcuCtxGetApiVersion(CUcontext ctx, unsigned int* version);
 typedef CUresult CUDAAPI tcuCtxGetStreamPriorityRange(int* leastPriority, int* greatestPriority);
+typedef CUresult CUDAAPI tcuCtxResetPersistingL2Cache(void);
 typedef CUresult CUDAAPI tcuCtxAttach(CUcontext* pctx, unsigned int flags);
 typedef CUresult CUDAAPI tcuCtxDetach(CUcontext ctx);
 typedef CUresult CUDAAPI tcuModuleLoad(CUmodule* module, const char* fname);
@@ -1641,6 +1987,19 @@ typedef CUresult CUDAAPI tcuArray3DGetDescriptor_v2(CUDA_ARRAY3D_DESCRIPTOR* pAr
 typedef CUresult CUDAAPI tcuMipmappedArrayCreate(CUmipmappedArray* pHandle, const CUDA_ARRAY3D_DESCRIPTOR* pMipmappedArrayDesc, unsigned int numMipmapLevels);
 typedef CUresult CUDAAPI tcuMipmappedArrayGetLevel(CUarray* pLevelArray, CUmipmappedArray hMipmappedArray, unsigned int level);
 typedef CUresult CUDAAPI tcuMipmappedArrayDestroy(CUmipmappedArray hMipmappedArray);
+typedef CUresult CUDAAPI tcuMemAddressReserve(CUdeviceptr* ptr, size_t size, size_t alignment, CUdeviceptr addr, unsigned long long flags);
+typedef CUresult CUDAAPI tcuMemAddressFree(CUdeviceptr ptr, size_t size);
+typedef CUresult CUDAAPI tcuMemCreate(CUmemGenericAllocationHandle* handle, size_t size, const CUmemAllocationProp* prop, unsigned long long flags);
+typedef CUresult CUDAAPI tcuMemRelease(CUmemGenericAllocationHandle handle);
+typedef CUresult CUDAAPI tcuMemMap(CUdeviceptr ptr, size_t size, size_t offset, CUmemGenericAllocationHandle handle, unsigned long long flags);
+typedef CUresult CUDAAPI tcuMemUnmap(CUdeviceptr ptr, size_t size);
+typedef CUresult CUDAAPI tcuMemSetAccess(CUdeviceptr ptr, size_t size, const CUmemAccessDesc* desc, size_t count);
+typedef CUresult CUDAAPI tcuMemGetAccess(unsigned long long* flags, const CUmemLocation* location, CUdeviceptr ptr);
+typedef CUresult CUDAAPI tcuMemExportToShareableHandle(void* shareableHandle, CUmemGenericAllocationHandle handle, CUmemAllocationHandleType handleType, unsigned long long flags);
+typedef CUresult CUDAAPI tcuMemImportFromShareableHandle(CUmemGenericAllocationHandle* handle, void* osHandle, CUmemAllocationHandleType shHandleType);
+typedef CUresult CUDAAPI tcuMemGetAllocationGranularity(size_t* granularity, const CUmemAllocationProp* prop, CUmemAllocationGranularity_flags option);
+typedef CUresult CUDAAPI tcuMemGetAllocationPropertiesFromHandle(CUmemAllocationProp* prop, CUmemGenericAllocationHandle handle);
+typedef CUresult CUDAAPI tcuMemRetainAllocationHandle(CUmemGenericAllocationHandle* handle, void* addr);
 typedef CUresult CUDAAPI tcuPointerGetAttribute(void* data, CUpointer_attribute attribute, CUdeviceptr ptr);
 typedef CUresult CUDAAPI tcuMemPrefetchAsync(CUdeviceptr devPtr, size_t count, CUdevice dstDevice, CUstream hStream);
 typedef CUresult CUDAAPI tcuMemAdvise(CUdeviceptr devPtr, size_t count, CUmem_advise advice, CUdevice device);
@@ -1664,6 +2023,9 @@ typedef CUresult CUDAAPI tcuStreamAttachMemAsync(CUstream hStream, CUdeviceptr d
 typedef CUresult CUDAAPI tcuStreamQuery(CUstream hStream);
 typedef CUresult CUDAAPI tcuStreamSynchronize(CUstream hStream);
 typedef CUresult CUDAAPI tcuStreamDestroy_v2(CUstream hStream);
+typedef CUresult CUDAAPI tcuStreamCopyAttributes(CUstream dst, CUstream src);
+typedef CUresult CUDAAPI tcuStreamGetAttribute(CUstream hStream, CUstreamAttrID attr, CUstreamAttrValue* value_out);
+typedef CUresult CUDAAPI tcuStreamSetAttribute(CUstream hStream, CUstreamAttrID attr, const CUstreamAttrValue* value);
 typedef CUresult CUDAAPI tcuEventCreate(CUevent* phEvent, unsigned int Flags);
 typedef CUresult CUDAAPI tcuEventRecord(CUevent hEvent, CUstream hStream);
 typedef CUresult CUDAAPI tcuEventQuery(CUevent hEvent);
@@ -1728,15 +2090,23 @@ typedef CUresult CUDAAPI tcuGraphNodeGetDependentNodes(CUgraphNode hNode, CUgrap
 typedef CUresult CUDAAPI tcuGraphAddDependencies(CUgraph hGraph, const CUgraphNode* from, const CUgraphNode* to, size_t numDependencies);
 typedef CUresult CUDAAPI tcuGraphRemoveDependencies(CUgraph hGraph, const CUgraphNode* from, const CUgraphNode* to, size_t numDependencies);
 typedef CUresult CUDAAPI tcuGraphDestroyNode(CUgraphNode hNode);
-typedef CUresult CUDAAPI tcuGraphInstantiate(CUgraphExec* phGraphExec, CUgraph hGraph, CUgraphNode* phErrorNode, char* logBuffer, size_t bufferSize);
+typedef CUresult CUDAAPI tcuGraphInstantiate_v2(CUgraphExec* phGraphExec, CUgraph hGraph, CUgraphNode* phErrorNode, char* logBuffer, size_t bufferSize);
 typedef CUresult CUDAAPI tcuGraphExecKernelNodeSetParams(CUgraphExec hGraphExec, CUgraphNode hNode, const CUDA_KERNEL_NODE_PARAMS* nodeParams);
+typedef CUresult CUDAAPI tcuGraphExecMemcpyNodeSetParams(CUgraphExec hGraphExec, CUgraphNode hNode, const CUDA_MEMCPY3D* copyParams, CUcontext ctx);
+typedef CUresult CUDAAPI tcuGraphExecMemsetNodeSetParams(CUgraphExec hGraphExec, CUgraphNode hNode, const CUDA_MEMSET_NODE_PARAMS* memsetParams, CUcontext ctx);
+typedef CUresult CUDAAPI tcuGraphExecHostNodeSetParams(CUgraphExec hGraphExec, CUgraphNode hNode, const CUDA_HOST_NODE_PARAMS* nodeParams);
 typedef CUresult CUDAAPI tcuGraphLaunch(CUgraphExec hGraphExec, CUstream hStream);
 typedef CUresult CUDAAPI tcuGraphExecDestroy(CUgraphExec hGraphExec);
 typedef CUresult CUDAAPI tcuGraphDestroy(CUgraph hGraph);
+typedef CUresult CUDAAPI tcuGraphExecUpdate(CUgraphExec hGraphExec, CUgraph hGraph, CUgraphNode* hErrorNode_out, CUgraphExecUpdateResult* updateResult_out);
+typedef CUresult CUDAAPI tcuGraphKernelNodeCopyAttributes(CUgraphNode dst, CUgraphNode src);
+typedef CUresult CUDAAPI tcuGraphKernelNodeGetAttribute(CUgraphNode hNode, CUkernelNodeAttrID attr, CUkernelNodeAttrValue* value_out);
+typedef CUresult CUDAAPI tcuGraphKernelNodeSetAttribute(CUgraphNode hNode, CUkernelNodeAttrID attr, const CUkernelNodeAttrValue* value);
 typedef CUresult CUDAAPI tcuOccupancyMaxActiveBlocksPerMultiprocessor(int* numBlocks, CUfunction func, int blockSize, size_t dynamicSMemSize);
 typedef CUresult CUDAAPI tcuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags(int* numBlocks, CUfunction func, int blockSize, size_t dynamicSMemSize, unsigned int flags);
 typedef CUresult CUDAAPI tcuOccupancyMaxPotentialBlockSize(int* minGridSize, int* blockSize, CUfunction func, CUoccupancyB2DSize blockSizeToDynamicSMemSize, size_t dynamicSMemSize, int blockSizeLimit);
 typedef CUresult CUDAAPI tcuOccupancyMaxPotentialBlockSizeWithFlags(int* minGridSize, int* blockSize, CUfunction func, CUoccupancyB2DSize blockSizeToDynamicSMemSize, size_t dynamicSMemSize, int blockSizeLimit, unsigned int flags);
+typedef CUresult CUDAAPI tcuOccupancyAvailableDynamicSMemPerBlock(size_t* dynamicSmemSize, CUfunction func, int numBlocks, int blockSize);
 typedef CUresult CUDAAPI tcuTexRefSetArray(CUtexref hTexRef, CUarray hArray, unsigned int Flags);
 typedef CUresult CUDAAPI tcuTexRefSetMipmappedArray(CUtexref hTexRef, CUmipmappedArray hMipmappedArray, unsigned int Flags);
 typedef CUresult CUDAAPI tcuTexRefSetAddress_v2(size_t* ByteOffset, CUtexref hTexRef, CUdeviceptr dptr, size_t bytes);
@@ -1786,6 +2156,7 @@ typedef CUresult CUDAAPI tcuGraphicsResourceSetMapFlags_v2(CUgraphicsResource re
 typedef CUresult CUDAAPI tcuGraphicsMapResources(unsigned int count, CUgraphicsResource* resources, CUstream hStream);
 typedef CUresult CUDAAPI tcuGraphicsUnmapResources(unsigned int count, CUgraphicsResource* resources, CUstream hStream);
 typedef CUresult CUDAAPI tcuGetExportTable(const void** ppExportTable, const CUuuid* pExportTableId);
+typedef CUresult CUDAAPI tcuFuncGetModule(CUmodule* hmod, CUfunction hfunc);
 
 typedef const char* CUDAAPI tnvrtcGetErrorString(nvrtcResult result);
 typedef nvrtcResult CUDAAPI tnvrtcVersion(int* major, int* minor);
@@ -1824,7 +2195,6 @@ typedef cudnnStatus_t CUDAAPI tcudnnGetTensorTransformDescriptor(cudnnTensorTran
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyTensorTransformDescriptor(cudnnTensorTransformDescriptor_t transformDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnTransformTensor(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
 typedef cudnnStatus_t CUDAAPI tcudnnTransformTensorEx(cudnnHandle_t handle, const cudnnTensorTransformDescriptor_t transDesc, const void* alpha, const cudnnTensorDescriptor_t srcDesc, const void* srcData, const void* beta, const cudnnTensorDescriptor_t destDesc, void* destData);
-typedef cudnnStatus_t CUDAAPI tcudnnGetFoldedConvBackwardDataDescriptors(const cudnnHandle_t handle, const cudnnFilterDescriptor_t filterDesc, const cudnnTensorDescriptor_t diffDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t gradDesc, const cudnnTensorFormat_t transformFormat, cudnnFilterDescriptor_t foldedFilterDesc, cudnnTensorDescriptor_t paddedDiffDesc, cudnnConvolutionDescriptor_t foldedConvDesc, cudnnTensorDescriptor_t foldedGradDesc, cudnnTensorTransformDescriptor_t filterFoldTransDesc, cudnnTensorTransformDescriptor_t diffPadTransDesc, cudnnTensorTransformDescriptor_t gradFoldTransDesc, cudnnTensorTransformDescriptor_t gradUnfoldTransDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnAddTensor(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t aDesc, const void* A, const void* beta, const cudnnTensorDescriptor_t cDesc, void* C);
 typedef cudnnStatus_t CUDAAPI tcudnnCreateOpTensorDescriptor(cudnnOpTensorDescriptor_t* opTensorDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSetOpTensorDescriptor(cudnnOpTensorDescriptor_t opTensorDesc, cudnnOpTensorOp_t opTensorOp, cudnnDataType_t opTensorCompType, cudnnNanPropagation_t opTensorNanOpt);
@@ -1848,47 +2218,7 @@ typedef cudnnStatus_t CUDAAPI tcudnnGetFilterNdDescriptor(const cudnnFilterDescr
 typedef cudnnStatus_t CUDAAPI tcudnnGetFilterSizeInBytes(const cudnnFilterDescriptor_t filterDesc, size_t* size);
 typedef cudnnStatus_t CUDAAPI tcudnnTransformFilter(cudnnHandle_t handle, const cudnnTensorTransformDescriptor_t transDesc, const void* alpha, const cudnnFilterDescriptor_t srcDesc, const void* srcData, const void* beta, const cudnnFilterDescriptor_t destDesc, void* destData);
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyFilterDescriptor(cudnnFilterDescriptor_t filterDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnReorderFilterAndBias(cudnnHandle_t handle, const cudnnFilterDescriptor_t filterDesc, cudnnReorderType_t reorderType, const void* filterData, void* reorderedFilterData, int reorderBias, const void* biasData, void* reorderedBiasData);
-typedef cudnnStatus_t CUDAAPI tcudnnCreateConvolutionDescriptor(cudnnConvolutionDescriptor_t* convDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionMathType(cudnnConvolutionDescriptor_t convDesc, cudnnMathType_t mathType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionMathType(cudnnConvolutionDescriptor_t convDesc, cudnnMathType_t* mathType);
-typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionGroupCount(cudnnConvolutionDescriptor_t convDesc, int groupCount);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionGroupCount(cudnnConvolutionDescriptor_t convDesc, int* groupCount);
-typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionReorderType(cudnnConvolutionDescriptor_t convDesc, cudnnReorderType_t reorderType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionReorderType(cudnnConvolutionDescriptor_t convDesc, cudnnReorderType_t* reorderType);
-typedef cudnnStatus_t CUDAAPI tcudnnSetConvolution2dDescriptor(cudnnConvolutionDescriptor_t convDesc, int pad_h, int pad_w, int u, int v, int dilation_h, int dilation_w, cudnnConvolutionMode_t mode, cudnnDataType_t computeType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolution2dDescriptor(const cudnnConvolutionDescriptor_t convDesc, int* pad_h, int* pad_w, int* u, int* v, int* dilation_h, int* dilation_w, cudnnConvolutionMode_t* mode, cudnnDataType_t* computeType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolution2dForwardOutputDim(const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t inputTensorDesc, const cudnnFilterDescriptor_t filterDesc, int* n, int* c, int* h, int* w);
-typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionNdDescriptor(cudnnConvolutionDescriptor_t convDesc, int arrayLength, const int padA[], const int filterStrideA[], const int dilationA[], cudnnConvolutionMode_t mode, cudnnDataType_t computeType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionNdDescriptor(const cudnnConvolutionDescriptor_t convDesc, int arrayLengthRequested, int* arrayLength, int padA[], int strideA[], int dilationA[], cudnnConvolutionMode_t* mode, cudnnDataType_t* computeType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionNdForwardOutputDim(const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t inputTensorDesc, const cudnnFilterDescriptor_t filterDesc, int nbDims, int tensorOuputDimA[]);
-typedef cudnnStatus_t CUDAAPI tcudnnDestroyConvolutionDescriptor(cudnnConvolutionDescriptor_t convDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionForwardAlgorithmMaxCount(cudnnHandle_t handle, int* count);
-typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionForwardAlgorithm(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t yDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionFwdAlgoPerf_t* perfResults);
-typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionForwardAlgorithmEx(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t yDesc, void* y, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionFwdAlgoPerf_t* perfResults, void* workSpace, size_t workSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionForwardAlgorithm(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t yDesc, cudnnConvolutionFwdPreference_t preference, size_t memoryLimitInBytes, cudnnConvolutionFwdAlgo_t* algo);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionForwardAlgorithm_v7(cudnnHandle_t handle, const cudnnTensorDescriptor_t srcDesc, const cudnnFilterDescriptor_t filterDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t destDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionFwdAlgoPerf_t* perfResults);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionForwardWorkspaceSize(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t yDesc, cudnnConvolutionFwdAlgo_t algo, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnConvolutionForward(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionFwdAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBiasActivationForward(cudnnHandle_t handle, const void* alpha1, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionFwdAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* alpha2, const cudnnTensorDescriptor_t zDesc, const void* z, const cudnnTensorDescriptor_t biasDesc, const void* bias, const cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBackwardBias(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t dyDesc, const void* dy, const void* beta, const cudnnTensorDescriptor_t dbDesc, void* db);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardFilterAlgorithmMaxCount(cudnnHandle_t handle, int* count);
-typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardFilterAlgorithm(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t dwDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdFilterAlgoPerf_t* perfResults);
-typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardFilterAlgorithmEx(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t dyDesc, const void* y, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t dwDesc, void* dw, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdFilterAlgoPerf_t* perfResults, void* workSpace, size_t workSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardFilterAlgorithm(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t dwDesc, cudnnConvolutionBwdFilterPreference_t preference, size_t memoryLimitInBytes, cudnnConvolutionBwdFilterAlgo_t* algo);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardFilterAlgorithm_v7(cudnnHandle_t handle, const cudnnTensorDescriptor_t srcDesc, const cudnnTensorDescriptor_t diffDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t gradDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdFilterAlgoPerf_t* perfResults);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardFilterWorkspaceSize(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t gradDesc, cudnnConvolutionBwdFilterAlgo_t algo, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBackwardFilter(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionBwdFilterAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* beta, const cudnnFilterDescriptor_t dwDesc, void* dw);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardDataAlgorithmMaxCount(cudnnHandle_t handle, int* count);
-typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardDataAlgorithm(cudnnHandle_t handle, const cudnnFilterDescriptor_t wDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t dxDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdDataAlgoPerf_t* perfResults);
-typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardDataAlgorithmEx(cudnnHandle_t handle, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t dxDesc, void* dx, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdDataAlgoPerf_t* perfResults, void* workSpace, size_t workSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardDataAlgorithm(cudnnHandle_t handle, const cudnnFilterDescriptor_t wDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t dxDesc, cudnnConvolutionBwdDataPreference_t preference, size_t memoryLimitInBytes, cudnnConvolutionBwdDataAlgo_t* algo);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardDataAlgorithm_v7(cudnnHandle_t handle, const cudnnFilterDescriptor_t filterDesc, const cudnnTensorDescriptor_t diffDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t gradDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdDataAlgoPerf_t* perfResults);
-typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardDataWorkspaceSize(cudnnHandle_t handle, const cudnnFilterDescriptor_t wDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t dxDesc, cudnnConvolutionBwdDataAlgo_t algo, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBackwardData(cudnnHandle_t handle, const void* alpha, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionBwdDataAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
-typedef cudnnStatus_t CUDAAPI tcudnnIm2Col(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const cudnnConvolutionDescriptor_t convDesc, void* colBuffer);
 typedef cudnnStatus_t CUDAAPI tcudnnSoftmaxForward(cudnnHandle_t handle, cudnnSoftmaxAlgorithm_t algo, cudnnSoftmaxMode_t mode, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnSoftmaxBackward(cudnnHandle_t handle, cudnnSoftmaxAlgorithm_t algo, cudnnSoftmaxMode_t mode, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
 typedef cudnnStatus_t CUDAAPI tcudnnCreatePoolingDescriptor(cudnnPoolingDescriptor_t* poolingDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSetPooling2dDescriptor(cudnnPoolingDescriptor_t poolingDesc, cudnnPoolingMode_t mode, cudnnNanPropagation_t maxpoolingNanOpt, int windowHeight, int windowWidth, int verticalPadding, int horizontalPadding, int verticalStride, int horizontalStride);
 typedef cudnnStatus_t CUDAAPI tcudnnGetPooling2dDescriptor(const cudnnPoolingDescriptor_t poolingDesc, cudnnPoolingMode_t* mode, cudnnNanPropagation_t* maxpoolingNanOpt, int* windowHeight, int* windowWidth, int* verticalPadding, int* horizontalPadding, int* verticalStride, int* horizontalStride);
@@ -1898,37 +2228,26 @@ typedef cudnnStatus_t CUDAAPI tcudnnGetPoolingNdForwardOutputDim(const cudnnPool
 typedef cudnnStatus_t CUDAAPI tcudnnGetPooling2dForwardOutputDim(const cudnnPoolingDescriptor_t poolingDesc, const cudnnTensorDescriptor_t inputTensorDesc, int* n, int* c, int* h, int* w);
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyPoolingDescriptor(cudnnPoolingDescriptor_t poolingDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnPoolingForward(cudnnHandle_t handle, const cudnnPoolingDescriptor_t poolingDesc, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnPoolingBackward(cudnnHandle_t handle, const cudnnPoolingDescriptor_t poolingDesc, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
 typedef cudnnStatus_t CUDAAPI tcudnnCreateActivationDescriptor(cudnnActivationDescriptor_t* activationDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSetActivationDescriptor(cudnnActivationDescriptor_t activationDesc, cudnnActivationMode_t mode, cudnnNanPropagation_t reluNanOpt, double coef);
 typedef cudnnStatus_t CUDAAPI tcudnnGetActivationDescriptor(const cudnnActivationDescriptor_t activationDesc, cudnnActivationMode_t* mode, cudnnNanPropagation_t* reluNanOpt, double* coef);
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyActivationDescriptor(cudnnActivationDescriptor_t activationDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnActivationForward(cudnnHandle_t handle, cudnnActivationDescriptor_t activationDesc, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnActivationBackward(cudnnHandle_t handle, cudnnActivationDescriptor_t activationDesc, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
 typedef cudnnStatus_t CUDAAPI tcudnnCreateLRNDescriptor(cudnnLRNDescriptor_t* normDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSetLRNDescriptor(cudnnLRNDescriptor_t normDesc, unsigned lrnN, double lrnAlpha, double lrnBeta, double lrnK);
 typedef cudnnStatus_t CUDAAPI tcudnnGetLRNDescriptor(cudnnLRNDescriptor_t normDesc, unsigned* lrnN, double* lrnAlpha, double* lrnBeta, double* lrnK);
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyLRNDescriptor(cudnnLRNDescriptor_t lrnDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnLRNCrossChannelForward(cudnnHandle_t handle, cudnnLRNDescriptor_t normDesc, cudnnLRNMode_t lrnMode, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnLRNCrossChannelBackward(cudnnHandle_t handle, cudnnLRNDescriptor_t normDesc, cudnnLRNMode_t lrnMode, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
 typedef cudnnStatus_t CUDAAPI tcudnnDivisiveNormalizationForward(cudnnHandle_t handle, cudnnLRNDescriptor_t normDesc, cudnnDivNormMode_t mode, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* means, void* temp, void* temp2, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnDivisiveNormalizationBackward(cudnnHandle_t handle, cudnnLRNDescriptor_t normDesc, cudnnDivNormMode_t mode, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* means, const void* dy, void* temp, void* temp2, const void* beta, const cudnnTensorDescriptor_t dXdMeansDesc, void* dx, void* dMeans);
 typedef cudnnStatus_t CUDAAPI tcudnnDeriveBNTensorDescriptor(cudnnTensorDescriptor_t derivedBnDesc, const cudnnTensorDescriptor_t xDesc, cudnnBatchNormMode_t mode);
-typedef cudnnStatus_t CUDAAPI tcudnnGetBatchNormalizationForwardTrainingExWorkspaceSize(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t zDesc, const cudnnTensorDescriptor_t yDesc, const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const cudnnActivationDescriptor_t activationDesc, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetBatchNormalizationBackwardExWorkspaceSize(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t yDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnTensorDescriptor_t dzDesc, const cudnnTensorDescriptor_t dxDesc, const cudnnTensorDescriptor_t dBnScaleBiasDesc, const cudnnActivationDescriptor_t activationDesc, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetBatchNormalizationTrainingExReserveSpaceSize(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t xDesc, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationForwardTraining(cudnnHandle_t handle, cudnnBatchNormMode_t mode, const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t yDesc, void* y, const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const void* bnScale, const void* bnBias, double exponentialAverageFactor, void* resultRunningMean, void* resultRunningVariance, double epsilon, void* resultSaveMean, void* resultSaveInvVariance);
-typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationForwardTrainingEx(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc, const void* xData, const cudnnTensorDescriptor_t zDesc, const void* zData, const cudnnTensorDescriptor_t yDesc, void* yData, const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const void* bnScale, const void* bnBias, double exponentialAverageFactor, void* resultRunningMean, void* resultRunningVariance, double epsilon, void* resultSaveMean, void* resultSaveInvVariance, cudnnActivationDescriptor_t activationDesc, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
 typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationForwardInference(cudnnHandle_t handle, cudnnBatchNormMode_t mode, const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t yDesc, void* y, const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const void* bnScale, const void* bnBias, const void* estimatedMean, const void* estimatedVariance, double epsilon);
-typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationBackward(cudnnHandle_t handle, cudnnBatchNormMode_t mode, const void* alphaDataDiff, const void* betaDataDiff, const void* alphaParamDiff, const void* betaParamDiff, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t dxDesc, void* dx, const cudnnTensorDescriptor_t dBnScaleBiasDesc, const void* bnScale, void* dBnScaleResult, void* dBnBiasResult, double epsilon, const void* savedMean, const void* savedInvVariance);
-typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationBackwardEx(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const void* alphaDataDiff, const void* betaDataDiff, const void* alphaParamDiff, const void* betaParamDiff, const cudnnTensorDescriptor_t xDesc, const void* xData, const cudnnTensorDescriptor_t yDesc, const void* yData, const cudnnTensorDescriptor_t dyDesc, const void* dyData, const cudnnTensorDescriptor_t dzDesc, void* dzData, const cudnnTensorDescriptor_t dxDesc, void* dxData, const cudnnTensorDescriptor_t dBnScaleBiasDesc, const void* bnScaleData, const void* bnBiasData, void* dBnScaleData, void* dBnBiasData, double epsilon, const void* savedMean, const void* savedInvVariance, cudnnActivationDescriptor_t activationDesc, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnDeriveNormTensorDescriptor(cudnnTensorDescriptor_t derivedNormScaleBiasDesc, cudnnTensorDescriptor_t derivedNormMeanVarDesc, const cudnnTensorDescriptor_t xDesc, cudnnNormMode_t mode, int groupCnt);
+typedef cudnnStatus_t CUDAAPI tcudnnNormalizationForwardInference(cudnnHandle_t handle, cudnnNormMode_t mode, cudnnNormOps_t normOps, cudnnNormAlgo_t algo, const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t normScaleBiasDesc, const void* normScale, const void* normBias, const cudnnTensorDescriptor_t normMeanVarDesc, const void* estimatedMean, const void* estimatedVariance, const cudnnTensorDescriptor_t zDesc, const void* z, cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t yDesc, void* y, double epsilon, int groupCnt);
 typedef cudnnStatus_t CUDAAPI tcudnnCreateSpatialTransformerDescriptor(cudnnSpatialTransformerDescriptor_t* stDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSetSpatialTransformerNdDescriptor(cudnnSpatialTransformerDescriptor_t stDesc, cudnnSamplerType_t samplerType, cudnnDataType_t dataType, const int nbDims, const int dimA[]);
 typedef cudnnStatus_t CUDAAPI tcudnnDestroySpatialTransformerDescriptor(cudnnSpatialTransformerDescriptor_t stDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSpatialTfGridGeneratorForward(cudnnHandle_t handle, const cudnnSpatialTransformerDescriptor_t stDesc, const void* theta, void* grid);
-typedef cudnnStatus_t CUDAAPI tcudnnSpatialTfGridGeneratorBackward(cudnnHandle_t handle, const cudnnSpatialTransformerDescriptor_t stDesc, const void* dgrid, void* dtheta);
 typedef cudnnStatus_t CUDAAPI tcudnnSpatialTfSamplerForward(cudnnHandle_t handle, cudnnSpatialTransformerDescriptor_t stDesc, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* grid, const void* beta, cudnnTensorDescriptor_t yDesc, void* y);
-typedef cudnnStatus_t CUDAAPI tcudnnSpatialTfSamplerBackward(cudnnHandle_t handle, cudnnSpatialTransformerDescriptor_t stDesc, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx, const void* alphaDgrid, const cudnnTensorDescriptor_t dyDesc, const void* dy, const void* grid, const void* betaDgrid, void* dgrid);
 typedef cudnnStatus_t CUDAAPI tcudnnCreateDropoutDescriptor(cudnnDropoutDescriptor_t* dropoutDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyDropoutDescriptor(cudnnDropoutDescriptor_t dropoutDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnDropoutGetStatesSize(cudnnHandle_t handle, size_t* sizeInBytes);
@@ -1937,71 +2256,6 @@ typedef cudnnStatus_t CUDAAPI tcudnnSetDropoutDescriptor(cudnnDropoutDescriptor_
 typedef cudnnStatus_t CUDAAPI tcudnnRestoreDropoutDescriptor(cudnnDropoutDescriptor_t dropoutDesc, cudnnHandle_t handle, float dropout, void* states, size_t stateSizeInBytes, unsigned long long seed);
 typedef cudnnStatus_t CUDAAPI tcudnnGetDropoutDescriptor(cudnnDropoutDescriptor_t dropoutDesc, cudnnHandle_t handle, float* dropout, void** states, unsigned long long* seed);
 typedef cudnnStatus_t CUDAAPI tcudnnDropoutForward(cudnnHandle_t handle, const cudnnDropoutDescriptor_t dropoutDesc, const cudnnTensorDescriptor_t xdesc, const void* x, const cudnnTensorDescriptor_t ydesc, void* y, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnDropoutBackward(cudnnHandle_t handle, const cudnnDropoutDescriptor_t dropoutDesc, const cudnnTensorDescriptor_t dydesc, const void* dy, const cudnnTensorDescriptor_t dxdesc, void* dx, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnCreateRNNDescriptor(cudnnRNNDescriptor_t* rnnDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnDestroyRNNDescriptor(cudnnRNNDescriptor_t rnnDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNDescriptor(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, const int hiddenSize, const int numLayers, cudnnDropoutDescriptor_t dropoutDesc, cudnnRNNInputMode_t inputMode, cudnnDirectionMode_t direction, cudnnRNNMode_t mode, cudnnRNNAlgo_t algo, cudnnDataType_t mathPrec);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNDescriptor(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, int* hiddenSize, int* numLayers, cudnnDropoutDescriptor_t* dropoutDesc, cudnnRNNInputMode_t* inputMode, cudnnDirectionMode_t* direction, cudnnRNNMode_t* mode, cudnnRNNAlgo_t* algo, cudnnDataType_t* mathPrec);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNMatrixMathType(cudnnRNNDescriptor_t rnnDesc, cudnnMathType_t mType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNMatrixMathType(cudnnRNNDescriptor_t rnnDesc, cudnnMathType_t* mType);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNBiasMode(cudnnRNNDescriptor_t rnnDesc, cudnnRNNBiasMode_t biasMode);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNBiasMode(cudnnRNNDescriptor_t rnnDesc, cudnnRNNBiasMode_t* biasMode);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNSetClip(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnRNNClipMode_t clipMode, cudnnNanPropagation_t clipNanOpt, double lclip, double rclip);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNGetClip(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnRNNClipMode_t* clipMode, cudnnNanPropagation_t* clipNanOpt, double* lclip, double* rclip);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNProjectionLayers(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, const int recProjSize, const int outProjSize);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNProjectionLayers(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* recProjSize, int* outProjSize);
-typedef cudnnStatus_t CUDAAPI tcudnnCreatePersistentRNNPlan(cudnnRNNDescriptor_t rnnDesc, const int minibatch, const cudnnDataType_t dataType, cudnnPersistentRNNPlan_t* plan);
-typedef cudnnStatus_t CUDAAPI tcudnnDestroyPersistentRNNPlan(cudnnPersistentRNNPlan_t plan);
-typedef cudnnStatus_t CUDAAPI tcudnnSetPersistentRNNPlan(cudnnRNNDescriptor_t rnnDesc, cudnnPersistentRNNPlan_t plan);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNWorkspaceSize(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNTrainingReserveSize(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, size_t* sizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNParamsSize(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnTensorDescriptor_t xDesc, size_t* sizeInBytes, cudnnDataType_t dataType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNLinLayerMatrixParams(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int pseudoLayer, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const void* w, const int linLayerID, cudnnFilterDescriptor_t linLayerMatDesc, void** linLayerMat);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNLinLayerBiasParams(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int pseudoLayer, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const void* w, const int linLayerID, cudnnFilterDescriptor_t linLayerBiasDesc, void** linLayerBias);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardInference(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, void* workspace, size_t workSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardTraining(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardData(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* yDesc, const void* y, const cudnnTensorDescriptor_t* dyDesc, const void* dy, const cudnnTensorDescriptor_t dhyDesc, const void* dhy, const cudnnTensorDescriptor_t dcyDesc, const void* dcy, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnTensorDescriptor_t* dxDesc, void* dx, const cudnnTensorDescriptor_t dhxDesc, void* dhx, const cudnnTensorDescriptor_t dcxDesc, void* dcx, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardWeights(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t* yDesc, const void* y, const void* workspace, size_t workSpaceSizeInBytes, const cudnnFilterDescriptor_t dwDesc, void* dw, const void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNPaddingMode(cudnnRNNDescriptor_t rnnDesc, cudnnRNNPaddingMode_t paddingMode);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNPaddingMode(cudnnRNNDescriptor_t rnnDesc, cudnnRNNPaddingMode_t* paddingMode);
-typedef cudnnStatus_t CUDAAPI tcudnnCreateRNNDataDescriptor(cudnnRNNDataDescriptor_t* rnnDataDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnDestroyRNNDataDescriptor(cudnnRNNDataDescriptor_t rnnDataDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNDataDescriptor(cudnnRNNDataDescriptor_t rnnDataDesc, cudnnDataType_t dataType, cudnnRNNDataLayout_t layout, int maxSeqLength, int batchSize, int vectorSize, const int seqLengthArray[], void* paddingFill);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNDataDescriptor(cudnnRNNDataDescriptor_t rnnDataDesc, cudnnDataType_t* dataType, cudnnRNNDataLayout_t* layout, int* maxSeqLength, int* batchSize, int* vectorSize, int arrayLengthRequested, int seqLengthArray[], void* paddingFill);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardTrainingEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnRNNDataDescriptor_t yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const cudnnRNNDataDescriptor_t kDesc, const void* keys, const cudnnRNNDataDescriptor_t cDesc, void* cAttn, const cudnnRNNDataDescriptor_t iDesc, void* iAttn, const cudnnRNNDataDescriptor_t qDesc, void* queries, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardInferenceEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnRNNDataDescriptor_t yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const cudnnRNNDataDescriptor_t kDesc, const void* keys, const cudnnRNNDataDescriptor_t cDesc, void* cAttn, const cudnnRNNDataDescriptor_t iDesc, void* iAttn, const cudnnRNNDataDescriptor_t qDesc, void* queries, void* workSpace, size_t workSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardDataEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t yDesc, const void* y, const cudnnRNNDataDescriptor_t dyDesc, const void* dy, const cudnnRNNDataDescriptor_t dcDesc, const void* dcAttn, const cudnnTensorDescriptor_t dhyDesc, const void* dhy, const cudnnTensorDescriptor_t dcyDesc, const void* dcy, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnRNNDataDescriptor_t dxDesc, void* dx, const cudnnTensorDescriptor_t dhxDesc, void* dhx, const cudnnTensorDescriptor_t dcxDesc, void* dcx, const cudnnRNNDataDescriptor_t dkDesc, void* dkeys, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardWeightsEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnRNNDataDescriptor_t yDesc, const void* y, void* workSpace, size_t workSpaceSizeInBytes, const cudnnFilterDescriptor_t dwDesc, void* dw, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNAlgorithmDescriptor(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnAlgorithmDescriptor_t algoDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNForwardInferenceAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
-typedef cudnnStatus_t CUDAAPI tcudnnFindRNNForwardInferenceAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, void* workspace, size_t workSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNForwardTrainingAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
-typedef cudnnStatus_t CUDAAPI tcudnnFindRNNForwardTrainingAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNBackwardDataAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
-typedef cudnnStatus_t CUDAAPI tcudnnFindRNNBackwardDataAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* yDesc, const void* y, const cudnnTensorDescriptor_t* dyDesc, const void* dy, const cudnnTensorDescriptor_t dhyDesc, const void* dhy, const cudnnTensorDescriptor_t dcyDesc, const void* dcy, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnTensorDescriptor_t* dxDesc, void* dx, const cudnnTensorDescriptor_t dhxDesc, void* dhx, const cudnnTensorDescriptor_t dcxDesc, void* dcx, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetRNNBackwardWeightsAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
-typedef cudnnStatus_t CUDAAPI tcudnnFindRNNBackwardWeightsAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t* yDesc, const void* y, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, const void* workspace, size_t workSpaceSizeInBytes, const cudnnFilterDescriptor_t dwDesc, void* dw, const void* reserveSpace, size_t reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnCreateSeqDataDescriptor(cudnnSeqDataDescriptor_t* seqDataDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnDestroySeqDataDescriptor(cudnnSeqDataDescriptor_t seqDataDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnSetSeqDataDescriptor(cudnnSeqDataDescriptor_t seqDataDesc, cudnnDataType_t dataType, int nbDims, const int dimA[], const cudnnSeqDataAxis_t axes[], size_t seqLengthArraySize, const int seqLengthArray[], void* paddingFill);
-typedef cudnnStatus_t CUDAAPI tcudnnGetSeqDataDescriptor(const cudnnSeqDataDescriptor_t seqDataDesc, cudnnDataType_t* dataType, int* nbDims, int nbDimsRequested, int dimA[], cudnnSeqDataAxis_t axes[], size_t* seqLengthArraySize, size_t seqLengthSizeRequested, int seqLengthArray[], void* paddingFill);
-typedef cudnnStatus_t CUDAAPI tcudnnCreateAttnDescriptor(cudnnAttnDescriptor_t* attnDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnDestroyAttnDescriptor(cudnnAttnDescriptor_t attnDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnSetAttnDescriptor(cudnnAttnDescriptor_t attnDesc, unsigned attnMode, int nHeads, double smScaler, cudnnDataType_t dataType, cudnnDataType_t computePrec, cudnnMathType_t mathType, cudnnDropoutDescriptor_t attnDropoutDesc, cudnnDropoutDescriptor_t postDropoutDesc, int qSize, int kSize, int vSize, int qProjSize, int kProjSize, int vProjSize, int oProjSize, int qoMaxSeqLength, int kvMaxSeqLength, int maxBatchSize, int maxBeamSize);
-typedef cudnnStatus_t CUDAAPI tcudnnGetAttnDescriptor(cudnnAttnDescriptor_t attnDesc, unsigned* attnMode, int* nHeads, double* smScaler, cudnnDataType_t* dataType, cudnnDataType_t* computePrec, cudnnMathType_t* mathType, cudnnDropoutDescriptor_t* attnDropoutDesc, cudnnDropoutDescriptor_t* postDropoutDesc, int* qSize, int* kSize, int* vSize, int* qProjSize, int* kProjSize, int* vProjSize, int* oProjSize, int* qoMaxSeqLength, int* kvMaxSeqLength, int* maxBatchSize, int* maxBeamSize);
-typedef cudnnStatus_t CUDAAPI tcudnnGetMultiHeadAttnBuffers(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, size_t* weightSizeInBytes, size_t* workSpaceSizeInBytes, size_t* reserveSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetMultiHeadAttnWeights(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, cudnnMultiHeadAttnWeightKind_t wKind, size_t weightSizeInBytes, const void* weights, cudnnTensorDescriptor_t wDesc, void** wAddr);
-typedef cudnnStatus_t CUDAAPI tcudnnMultiHeadAttnForward(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, int currIdx, const int* loWinIdx, const int* hiWinIdx, const int* seqLengthArrayQRO, const int* seqLengthArrayKV, const cudnnSeqDataDescriptor_t qDesc, const void* queries, const void* residuals, const cudnnSeqDataDescriptor_t kDesc, const void* keys, const cudnnSeqDataDescriptor_t vDesc, const void* values, const cudnnSeqDataDescriptor_t oDesc, void* out, size_t weightSizeInBytes, const void* weights, size_t workSpaceSizeInBytes, void* workSpace, size_t reserveSpaceSizeInBytes, void* reserveSpace);
-typedef cudnnStatus_t CUDAAPI tcudnnMultiHeadAttnBackwardData(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, const int* loWinIdx, const int* hiWinIdx, const int* seqLengthArrayDQDO, const int* seqLengthArrayDKDV, const cudnnSeqDataDescriptor_t doDesc, const void* dout, const cudnnSeqDataDescriptor_t dqDesc, void* dqueries, const void* queries, const cudnnSeqDataDescriptor_t dkDesc, void* dkeys, const void* keys, const cudnnSeqDataDescriptor_t dvDesc, void* dvalues, const void* values, size_t weightSizeInBytes, const void* weights, size_t workSpaceSizeInBytes, void* workSpace, size_t reserveSpaceSizeInBytes, void* reserveSpace);
-typedef cudnnStatus_t CUDAAPI tcudnnMultiHeadAttnBackwardWeights(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, cudnnWgradMode_t addGrad, const cudnnSeqDataDescriptor_t qDesc, const void* queries, const cudnnSeqDataDescriptor_t kDesc, const void* keys, const cudnnSeqDataDescriptor_t vDesc, const void* values, const cudnnSeqDataDescriptor_t doDesc, const void* dout, size_t weightSizeInBytes, const void* weights, void* dweights, size_t workSpaceSizeInBytes, void* workSpace, size_t reserveSpaceSizeInBytes, void* reserveSpace);
-typedef cudnnStatus_t CUDAAPI tcudnnCreateCTCLossDescriptor(cudnnCTCLossDescriptor_t* ctcLossDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnSetCTCLossDescriptor(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t compType);
-typedef cudnnStatus_t CUDAAPI tcudnnSetCTCLossDescriptorEx(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t compType, cudnnLossNormalizationMode_t normMode, cudnnNanPropagation_t gradMode);
-typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossDescriptor(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t* compType);
-typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossDescriptorEx(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t* compType, cudnnLossNormalizationMode_t* normMode, cudnnNanPropagation_t* gradMode);
-typedef cudnnStatus_t CUDAAPI tcudnnDestroyCTCLossDescriptor(cudnnCTCLossDescriptor_t ctcLossDesc);
-typedef cudnnStatus_t CUDAAPI tcudnnCTCLoss(cudnnHandle_t handle, const cudnnTensorDescriptor_t probsDesc, const void* probs, const int* labels, const int* labelLengths, const int* inputLengths, void* costs, const cudnnTensorDescriptor_t gradientsDesc, const void* gradients, cudnnCTCLossAlgo_t algo, cudnnCTCLossDescriptor_t ctcLossDesc, void* workspace, size_t workSpaceSizeInBytes);
-typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossWorkspaceSize(cudnnHandle_t handle, const cudnnTensorDescriptor_t probsDesc, const cudnnTensorDescriptor_t gradientsDesc, const int* labels, const int* labelLengths, const int* inputLengths, cudnnCTCLossAlgo_t algo, cudnnCTCLossDescriptor_t ctcLossDesc, size_t* sizeInBytes);
 typedef cudnnStatus_t CUDAAPI tcudnnCreateAlgorithmDescriptor(cudnnAlgorithmDescriptor_t* algoDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSetAlgorithmDescriptor(cudnnAlgorithmDescriptor_t algoDesc, cudnnAlgorithm_t algorithm);
 typedef cudnnStatus_t CUDAAPI tcudnnGetAlgorithmDescriptor(const cudnnAlgorithmDescriptor_t algoDesc, cudnnAlgorithm_t* algorithm);
@@ -2016,6 +2270,147 @@ typedef cudnnStatus_t CUDAAPI tcudnnSaveAlgorithm(cudnnHandle_t handle, cudnnAlg
 typedef cudnnStatus_t CUDAAPI tcudnnRestoreAlgorithm(cudnnHandle_t handle, void* algoSpace, size_t algoSpaceSizeInBytes, cudnnAlgorithmDescriptor_t algoDesc);
 typedef cudnnStatus_t CUDAAPI tcudnnSetCallback(unsigned mask, void* udata, cudnnCallback_t fptr);
 typedef cudnnStatus_t CUDAAPI tcudnnGetCallback(unsigned* mask, void** udata, cudnnCallback_t* fptr);
+typedef cudnnStatus_t CUDAAPI tcudnnOpsInferVersionCheck(void);
+typedef cudnnStatus_t CUDAAPI tcudnnSoftmaxBackward(cudnnHandle_t handle, cudnnSoftmaxAlgorithm_t algo, cudnnSoftmaxMode_t mode, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
+typedef cudnnStatus_t CUDAAPI tcudnnPoolingBackward(cudnnHandle_t handle, const cudnnPoolingDescriptor_t poolingDesc, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
+typedef cudnnStatus_t CUDAAPI tcudnnActivationBackward(cudnnHandle_t handle, cudnnActivationDescriptor_t activationDesc, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
+typedef cudnnStatus_t CUDAAPI tcudnnLRNCrossChannelBackward(cudnnHandle_t handle, cudnnLRNDescriptor_t normDesc, cudnnLRNMode_t lrnMode, const void* alpha, const cudnnTensorDescriptor_t yDesc, const void* y, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
+typedef cudnnStatus_t CUDAAPI tcudnnDivisiveNormalizationBackward(cudnnHandle_t handle, cudnnLRNDescriptor_t normDesc, cudnnDivNormMode_t mode, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* means, const void* dy, void* temp, void* temp2, const void* beta, const cudnnTensorDescriptor_t dXdMeansDesc, void* dx, void* dMeans);
+typedef cudnnStatus_t CUDAAPI tcudnnGetBatchNormalizationForwardTrainingExWorkspaceSize(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t zDesc, const cudnnTensorDescriptor_t yDesc, const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const cudnnActivationDescriptor_t activationDesc, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetBatchNormalizationBackwardExWorkspaceSize(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t yDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnTensorDescriptor_t dzDesc, const cudnnTensorDescriptor_t dxDesc, const cudnnTensorDescriptor_t dBnScaleBiasDesc, const cudnnActivationDescriptor_t activationDesc, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetBatchNormalizationTrainingExReserveSpaceSize(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t xDesc, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationForwardTraining(cudnnHandle_t handle, cudnnBatchNormMode_t mode, const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t yDesc, void* y, const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const void* bnScale, const void* bnBias, double exponentialAverageFactor, void* resultRunningMean, void* resultRunningVariance, double epsilon, void* resultSaveMean, void* resultSaveInvVariance);
+typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationForwardTrainingEx(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc, const void* xData, const cudnnTensorDescriptor_t zDesc, const void* zData, const cudnnTensorDescriptor_t yDesc, void* yData, const cudnnTensorDescriptor_t bnScaleBiasMeanVarDesc, const void* bnScale, const void* bnBias, double exponentialAverageFactor, void* resultRunningMean, void* resultRunningVariance, double epsilon, void* resultSaveMean, void* resultSaveInvVariance, cudnnActivationDescriptor_t activationDesc, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationBackward(cudnnHandle_t handle, cudnnBatchNormMode_t mode, const void* alphaDataDiff, const void* betaDataDiff, const void* alphaParamDiff, const void* betaParamDiff, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnTensorDescriptor_t dxDesc, void* dx, const cudnnTensorDescriptor_t dBnScaleBiasDesc, const void* bnScale, void* dBnScaleResult, void* dBnBiasResult, double epsilon, const void* savedMean, const void* savedInvVariance);
+typedef cudnnStatus_t CUDAAPI tcudnnBatchNormalizationBackwardEx(cudnnHandle_t handle, cudnnBatchNormMode_t mode, cudnnBatchNormOps_t bnOps, const void* alphaDataDiff, const void* betaDataDiff, const void* alphaParamDiff, const void* betaParamDiff, const cudnnTensorDescriptor_t xDesc, const void* xData, const cudnnTensorDescriptor_t yDesc, const void* yData, const cudnnTensorDescriptor_t dyDesc, const void* dyData, const cudnnTensorDescriptor_t dzDesc, void* dzData, const cudnnTensorDescriptor_t dxDesc, void* dxData, const cudnnTensorDescriptor_t dBnScaleBiasDesc, const void* bnScaleData, const void* bnBiasData, void* dBnScaleData, void* dBnBiasData, double epsilon, const void* savedMean, const void* savedInvVariance, cudnnActivationDescriptor_t activationDesc, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetNormalizationForwardTrainingWorkspaceSize(cudnnHandle_t handle, cudnnNormMode_t mode, cudnnNormOps_t normOps, cudnnNormAlgo_t algo, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t zDesc, const cudnnTensorDescriptor_t yDesc, const cudnnTensorDescriptor_t normScaleBiasDesc, const cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t normMeanVarDesc, size_t* sizeInBytes, int groupCnt);
+typedef cudnnStatus_t CUDAAPI tcudnnGetNormalizationBackwardWorkspaceSize(cudnnHandle_t handle, cudnnNormMode_t mode, cudnnNormOps_t normOps, cudnnNormAlgo_t algo, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t yDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnTensorDescriptor_t dzDesc, const cudnnTensorDescriptor_t dxDesc, const cudnnTensorDescriptor_t dNormScaleBiasDesc, const cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t normMeanVarDesc, size_t* sizeInBytes, int groupCnt);
+typedef cudnnStatus_t CUDAAPI tcudnnGetNormalizationTrainingReserveSpaceSize(cudnnHandle_t handle, cudnnNormMode_t mode, cudnnNormOps_t normOps, cudnnNormAlgo_t algo, const cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t xDesc, size_t* sizeInBytes, int groupCnt);
+typedef cudnnStatus_t CUDAAPI tcudnnNormalizationForwardTraining(cudnnHandle_t handle, cudnnNormMode_t mode, cudnnNormOps_t normOps, cudnnNormAlgo_t algo, const void* alpha, const void* beta, const cudnnTensorDescriptor_t xDesc, const void* xData, const cudnnTensorDescriptor_t normScaleBiasDesc, const void* normScale, const void* normBias, double exponentialAverageFactor, const cudnnTensorDescriptor_t normMeanVarDesc, void* resultRunningMean, void* resultRunningVariance, double epsilon, void* resultSaveMean, void* resultSaveInvVariance, cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t zDesc, const void* zData, const cudnnTensorDescriptor_t yDesc, void* yData, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes, int groupCnt);
+typedef cudnnStatus_t CUDAAPI tcudnnNormalizationBackward(cudnnHandle_t handle, cudnnNormMode_t mode, cudnnNormOps_t normOps, cudnnNormAlgo_t algo, const void* alphaDataDiff, const void* betaDataDiff, const void* alphaParamDiff, const void* betaParamDiff, const cudnnTensorDescriptor_t xDesc, const void* xData, const cudnnTensorDescriptor_t yDesc, const void* yData, const cudnnTensorDescriptor_t dyDesc, const void* dyData, const cudnnTensorDescriptor_t dzDesc, void* dzData, const cudnnTensorDescriptor_t dxDesc, void* dxData, const cudnnTensorDescriptor_t dNormScaleBiasDesc, const void* normScaleData, const void* normBiasData, void* dNormScaleData, void* dNormBiasData, double epsilon, const cudnnTensorDescriptor_t normMeanVarDesc, const void* savedMean, const void* savedInvVariance, cudnnActivationDescriptor_t activationDesc, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes, int groupCnt);
+typedef cudnnStatus_t CUDAAPI tcudnnSpatialTfGridGeneratorBackward(cudnnHandle_t handle, const cudnnSpatialTransformerDescriptor_t stDesc, const void* dgrid, void* dtheta);
+typedef cudnnStatus_t CUDAAPI tcudnnSpatialTfSamplerBackward(cudnnHandle_t handle, cudnnSpatialTransformerDescriptor_t stDesc, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx, const void* alphaDgrid, const cudnnTensorDescriptor_t dyDesc, const void* dy, const void* grid, const void* betaDgrid, void* dgrid);
+typedef cudnnStatus_t CUDAAPI tcudnnDropoutBackward(cudnnHandle_t handle, const cudnnDropoutDescriptor_t dropoutDesc, const cudnnTensorDescriptor_t dydesc, const void* dy, const cudnnTensorDescriptor_t dxdesc, void* dx, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnOpsTrainVersionCheck(void);
+typedef cudnnStatus_t CUDAAPI tcudnnCreateRNNDescriptor(cudnnRNNDescriptor_t* rnnDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnDestroyRNNDescriptor(cudnnRNNDescriptor_t rnnDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNDescriptor_v8(cudnnRNNDescriptor_t rnnDesc, cudnnRNNAlgo_t algo, cudnnRNNMode_t cellMode, cudnnRNNBiasMode_t biasMode, cudnnDirectionMode_t dirMode, cudnnRNNInputMode_t inputMode, cudnnDataType_t dataType, cudnnDataType_t mathPrec, cudnnMathType_t mathType, int32_t inputSize, int32_t hiddenSize, int32_t projSize, int32_t numLayers, cudnnDropoutDescriptor_t dropoutDesc, uint32_t auxFlags);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNDescriptor_v8(cudnnRNNDescriptor_t rnnDesc, cudnnRNNAlgo_t* algo, cudnnRNNMode_t* cellMode, cudnnRNNBiasMode_t* biasMode, cudnnDirectionMode_t* dirMode, cudnnRNNInputMode_t* inputMode, cudnnDataType_t* dataType, cudnnDataType_t* mathPrec, cudnnMathType_t* mathType, int32_t* inputSize, int32_t* hiddenSize, int32_t* projSize, int32_t* numLayers, cudnnDropoutDescriptor_t* dropoutDesc, uint32_t* auxFlags);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNDescriptor_v6(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, const int hiddenSize, const int numLayers, cudnnDropoutDescriptor_t dropoutDesc, cudnnRNNInputMode_t inputMode, cudnnDirectionMode_t direction, cudnnRNNMode_t cellMode, cudnnRNNAlgo_t algo, cudnnDataType_t mathPrec);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNDescriptor_v6(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, int* hiddenSize, int* numLayers, cudnnDropoutDescriptor_t* dropoutDesc, cudnnRNNInputMode_t* inputMode, cudnnDirectionMode_t* direction, cudnnRNNMode_t* cellMode, cudnnRNNAlgo_t* algo, cudnnDataType_t* mathPrec);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNMatrixMathType(cudnnRNNDescriptor_t rnnDesc, cudnnMathType_t mType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNMatrixMathType(cudnnRNNDescriptor_t rnnDesc, cudnnMathType_t* mType);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNBiasMode(cudnnRNNDescriptor_t rnnDesc, cudnnRNNBiasMode_t biasMode);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNBiasMode(cudnnRNNDescriptor_t rnnDesc, cudnnRNNBiasMode_t* biasMode);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNSetClip_v8(cudnnRNNDescriptor_t rnnDesc, cudnnRNNClipMode_t clipMode, cudnnNanPropagation_t clipNanOpt, double lclip, double rclip);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNGetClip_v8(cudnnRNNDescriptor_t rnnDesc, cudnnRNNClipMode_t* clipMode, cudnnNanPropagation_t* clipNanOpt, double* lclip, double* rclip);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNSetClip(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnRNNClipMode_t clipMode, cudnnNanPropagation_t clipNanOpt, double lclip, double rclip);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNGetClip(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnRNNClipMode_t* clipMode, cudnnNanPropagation_t* clipNanOpt, double* lclip, double* rclip);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNProjectionLayers(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, const int recProjSize, const int outProjSize);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNProjectionLayers(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* recProjSize, int* outProjSize);
+typedef cudnnStatus_t CUDAAPI tcudnnCreatePersistentRNNPlan(cudnnRNNDescriptor_t rnnDesc, const int minibatch, const cudnnDataType_t dataType, cudnnPersistentRNNPlan_t* plan);
+typedef cudnnStatus_t CUDAAPI tcudnnDestroyPersistentRNNPlan(cudnnPersistentRNNPlan_t plan);
+typedef cudnnStatus_t CUDAAPI tcudnnSetPersistentRNNPlan(cudnnRNNDescriptor_t rnnDesc, cudnnPersistentRNNPlan_t plan);
+typedef cudnnStatus_t CUDAAPI tcudnnBuildRNNDynamic(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, int miniBatch);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNWorkspaceSize(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNTrainingReserveSize(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNTempSpaceSizes(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnForwardMode_t fMode, cudnnRNNDataDescriptor_t xDesc, size_t* workSpaceSize, size_t* reserveSpaceSize);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNParamsSize(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnTensorDescriptor_t xDesc, size_t* sizeInBytes, cudnnDataType_t dataType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNWeightSpaceSize(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, size_t* weightSpaceSize);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNLinLayerMatrixParams(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int pseudoLayer, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const void* w, const int linLayerID, cudnnFilterDescriptor_t linLayerMatDesc, void** linLayerMat);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNLinLayerBiasParams(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int pseudoLayer, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const void* w, const int linLayerID, cudnnFilterDescriptor_t linLayerBiasDesc, void** linLayerBias);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNWeightParams(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, int32_t pseudoLayer, size_t weightSpaceSize, const void* weightSpace, int32_t linLayerID, cudnnTensorDescriptor_t mDesc, void** mAddr, cudnnTensorDescriptor_t bDesc, void** bAddr);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardInference(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, void* workSpace, size_t workSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNPaddingMode(cudnnRNNDescriptor_t rnnDesc, unsigned paddingMode);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNPaddingMode(cudnnRNNDescriptor_t rnnDesc, unsigned* paddingMode);
+typedef cudnnStatus_t CUDAAPI tcudnnCreateRNNDataDescriptor(cudnnRNNDataDescriptor_t* rnnDataDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnDestroyRNNDataDescriptor(cudnnRNNDataDescriptor_t rnnDataDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNDataDescriptor(cudnnRNNDataDescriptor_t rnnDataDesc, cudnnDataType_t dataType, cudnnRNNDataLayout_t layout, int maxSeqLength, int batchSize, int vectorSize, const int seqLengthArray[], void* paddingFill);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNDataDescriptor(cudnnRNNDataDescriptor_t rnnDataDesc, cudnnDataType_t* dataType, cudnnRNNDataLayout_t* layout, int* maxSeqLength, int* batchSize, int* vectorSize, int arrayLengthRequested, int seqLengthArray[], void* paddingFill);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardInferenceEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnRNNDataDescriptor_t yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const cudnnRNNDataDescriptor_t kDesc, const void* keys, const cudnnRNNDataDescriptor_t cDesc, void* cAttn, const cudnnRNNDataDescriptor_t iDesc, void* iAttn, const cudnnRNNDataDescriptor_t qDesc, void* queries, void* workSpace, size_t workSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNForward(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnForwardMode_t fwdMode, const int32_t devSeqLengths[], cudnnRNNDataDescriptor_t xDesc, const void* x, cudnnRNNDataDescriptor_t yDesc, void* y, cudnnTensorDescriptor_t hDesc, const void* hx, void* hy, cudnnTensorDescriptor_t cDesc, const void* cx, void* cy, size_t weightSpaceSize, const void* weightSpace, size_t workSpaceSize, void* workSpace, size_t reserveSpaceSize, void* reserveSpace);
+typedef cudnnStatus_t CUDAAPI tcudnnSetRNNAlgorithmDescriptor(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnAlgorithmDescriptor_t algoDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNForwardInferenceAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
+typedef cudnnStatus_t CUDAAPI tcudnnFindRNNForwardInferenceAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, void* workspace, size_t workSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnCreateSeqDataDescriptor(cudnnSeqDataDescriptor_t* seqDataDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnDestroySeqDataDescriptor(cudnnSeqDataDescriptor_t seqDataDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnSetSeqDataDescriptor(cudnnSeqDataDescriptor_t seqDataDesc, cudnnDataType_t dataType, int nbDims, const int dimA[], const cudnnSeqDataAxis_t axes[], size_t seqLengthArraySize, const int seqLengthArray[], void* paddingFill);
+typedef cudnnStatus_t CUDAAPI tcudnnGetSeqDataDescriptor(const cudnnSeqDataDescriptor_t seqDataDesc, cudnnDataType_t* dataType, int* nbDims, int nbDimsRequested, int dimA[], cudnnSeqDataAxis_t axes[], size_t* seqLengthArraySize, size_t seqLengthSizeRequested, int seqLengthArray[], void* paddingFill);
+typedef cudnnStatus_t CUDAAPI tcudnnCreateAttnDescriptor(cudnnAttnDescriptor_t* attnDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnDestroyAttnDescriptor(cudnnAttnDescriptor_t attnDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnSetAttnDescriptor(cudnnAttnDescriptor_t attnDesc, unsigned attnMode, int nHeads, double smScaler, cudnnDataType_t dataType, cudnnDataType_t computePrec, cudnnMathType_t mathType, cudnnDropoutDescriptor_t attnDropoutDesc, cudnnDropoutDescriptor_t postDropoutDesc, int qSize, int kSize, int vSize, int qProjSize, int kProjSize, int vProjSize, int oProjSize, int qoMaxSeqLength, int kvMaxSeqLength, int maxBatchSize, int maxBeamSize);
+typedef cudnnStatus_t CUDAAPI tcudnnGetAttnDescriptor(cudnnAttnDescriptor_t attnDesc, unsigned* attnMode, int* nHeads, double* smScaler, cudnnDataType_t* dataType, cudnnDataType_t* computePrec, cudnnMathType_t* mathType, cudnnDropoutDescriptor_t* attnDropoutDesc, cudnnDropoutDescriptor_t* postDropoutDesc, int* qSize, int* kSize, int* vSize, int* qProjSize, int* kProjSize, int* vProjSize, int* oProjSize, int* qoMaxSeqLength, int* kvMaxSeqLength, int* maxBatchSize, int* maxBeamSize);
+typedef cudnnStatus_t CUDAAPI tcudnnGetMultiHeadAttnBuffers(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, size_t* weightSizeInBytes, size_t* workSpaceSizeInBytes, size_t* reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetMultiHeadAttnWeights(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, cudnnMultiHeadAttnWeightKind_t wKind, size_t weightSizeInBytes, const void* weights, cudnnTensorDescriptor_t wDesc, void** wAddr);
+typedef cudnnStatus_t CUDAAPI tcudnnMultiHeadAttnForward(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, int currIdx, const int loWinIdx[], const int hiWinIdx[], const int devSeqLengthsQO[], const int devSeqLengthsKV[], const cudnnSeqDataDescriptor_t qDesc, const void* queries, const void* residuals, const cudnnSeqDataDescriptor_t kDesc, const void* keys, const cudnnSeqDataDescriptor_t vDesc, const void* values, const cudnnSeqDataDescriptor_t oDesc, void* out, size_t weightSizeInBytes, const void* weights, size_t workSpaceSizeInBytes, void* workSpace, size_t reserveSpaceSizeInBytes, void* reserveSpace);
+typedef cudnnStatus_t CUDAAPI tcudnnAdvInferVersionCheck(void);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardTraining(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardData(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* yDesc, const void* y, const cudnnTensorDescriptor_t* dyDesc, const void* dy, const cudnnTensorDescriptor_t dhyDesc, const void* dhy, const cudnnTensorDescriptor_t dcyDesc, const void* dcy, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnTensorDescriptor_t* dxDesc, void* dx, const cudnnTensorDescriptor_t dhxDesc, void* dhx, const cudnnTensorDescriptor_t dcxDesc, void* dcx, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardData_v8(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, const int32_t devSeqLengths[], cudnnRNNDataDescriptor_t yDesc, const void* y, const void* dy, cudnnRNNDataDescriptor_t xDesc, void* dx, cudnnTensorDescriptor_t hDesc, const void* hx, const void* dhy, void* dhx, cudnnTensorDescriptor_t cDesc, const void* cx, const void* dcy, void* dcx, size_t weightSpaceSize, const void* weightSpace, size_t workSpaceSize, void* workSpace, size_t reserveSpaceSize, void* reserveSpace);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardWeights(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t* yDesc, const void* y, const void* workSpace, size_t workSpaceSizeInBytes, const cudnnFilterDescriptor_t dwDesc, void* dw, const void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardWeights_v8(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, cudnnWgradMode_t addGrad, const int32_t devSeqLengths[], cudnnRNNDataDescriptor_t xDesc, const void* x, cudnnTensorDescriptor_t hDesc, const void* hx, cudnnRNNDataDescriptor_t yDesc, const void* y, size_t weightSpaceSize, void* dweightSpace, size_t workSpaceSize, void* workSpace, size_t reserveSpaceSize, void* reserveSpace);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNForwardTrainingEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnRNNDataDescriptor_t yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const cudnnRNNDataDescriptor_t kDesc, const void* keys, const cudnnRNNDataDescriptor_t cDesc, void* cAttn, const cudnnRNNDataDescriptor_t iDesc, void* iAttn, const cudnnRNNDataDescriptor_t qDesc, void* queries, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardDataEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t yDesc, const void* y, const cudnnRNNDataDescriptor_t dyDesc, const void* dy, const cudnnRNNDataDescriptor_t dcDesc, const void* dcAttn, const cudnnTensorDescriptor_t dhyDesc, const void* dhy, const cudnnTensorDescriptor_t dcyDesc, const void* dcy, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnRNNDataDescriptor_t dxDesc, void* dx, const cudnnTensorDescriptor_t dhxDesc, void* dhx, const cudnnTensorDescriptor_t dcxDesc, void* dcx, const cudnnRNNDataDescriptor_t dkDesc, void* dkeys, void* workSpace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnRNNBackwardWeightsEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const cudnnRNNDataDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnRNNDataDescriptor_t yDesc, const void* y, void* workSpace, size_t workSpaceSizeInBytes, const cudnnFilterDescriptor_t dwDesc, void* dw, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNForwardTrainingAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
+typedef cudnnStatus_t CUDAAPI tcudnnFindRNNForwardTrainingAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t* yDesc, void* y, const cudnnTensorDescriptor_t hyDesc, void* hy, const cudnnTensorDescriptor_t cyDesc, void* cy, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNBackwardDataAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
+typedef cudnnStatus_t CUDAAPI tcudnnFindRNNBackwardDataAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* yDesc, const void* y, const cudnnTensorDescriptor_t* dyDesc, const void* dy, const cudnnTensorDescriptor_t dhyDesc, const void* dhy, const cudnnTensorDescriptor_t dcyDesc, const void* dcy, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t cxDesc, const void* cx, const cudnnTensorDescriptor_t* dxDesc, void* dx, const cudnnTensorDescriptor_t dhxDesc, void* dhx, const cudnnTensorDescriptor_t dcxDesc, void* dcx, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, void* workspace, size_t workSpaceSizeInBytes, void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetRNNBackwardWeightsAlgorithmMaxCount(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, int* count);
+typedef cudnnStatus_t CUDAAPI tcudnnFindRNNBackwardWeightsAlgorithmEx(cudnnHandle_t handle, const cudnnRNNDescriptor_t rnnDesc, const int seqLength, const cudnnTensorDescriptor_t* xDesc, const void* x, const cudnnTensorDescriptor_t hxDesc, const void* hx, const cudnnTensorDescriptor_t* yDesc, const void* y, const float findIntensity, const int requestedAlgoCount, int* returnedAlgoCount, cudnnAlgorithmPerformance_t* perfResults, const void* workspace, size_t workSpaceSizeInBytes, const cudnnFilterDescriptor_t dwDesc, void* dw, const void* reserveSpace, size_t reserveSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnMultiHeadAttnBackwardData(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, const int loWinIdx[], const int hiWinIdx[], const int devSeqLengthsDQDO[], const int devSeqLengthsDKDV[], const cudnnSeqDataDescriptor_t doDesc, const void* dout, const cudnnSeqDataDescriptor_t dqDesc, void* dqueries, const void* queries, const cudnnSeqDataDescriptor_t dkDesc, void* dkeys, const void* keys, const cudnnSeqDataDescriptor_t dvDesc, void* dvalues, const void* values, size_t weightSizeInBytes, const void* weights, size_t workSpaceSizeInBytes, void* workSpace, size_t reserveSpaceSizeInBytes, void* reserveSpace);
+typedef cudnnStatus_t CUDAAPI tcudnnMultiHeadAttnBackwardWeights(cudnnHandle_t handle, const cudnnAttnDescriptor_t attnDesc, cudnnWgradMode_t addGrad, const cudnnSeqDataDescriptor_t qDesc, const void* queries, const cudnnSeqDataDescriptor_t kDesc, const void* keys, const cudnnSeqDataDescriptor_t vDesc, const void* values, const cudnnSeqDataDescriptor_t doDesc, const void* dout, size_t weightSizeInBytes, const void* weights, void* dweights, size_t workSpaceSizeInBytes, void* workSpace, size_t reserveSpaceSizeInBytes, void* reserveSpace);
+typedef cudnnStatus_t CUDAAPI tcudnnCreateCTCLossDescriptor(cudnnCTCLossDescriptor_t* ctcLossDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnSetCTCLossDescriptor(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t compType);
+typedef cudnnStatus_t CUDAAPI tcudnnSetCTCLossDescriptorEx(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t compType, cudnnLossNormalizationMode_t normMode, cudnnNanPropagation_t gradMode);
+typedef cudnnStatus_t CUDAAPI tcudnnSetCTCLossDescriptor_v8(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t compType, cudnnLossNormalizationMode_t normMode, cudnnNanPropagation_t gradMode, int maxLabelLength);
+typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossDescriptor(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t* compType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossDescriptorEx(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t* compType, cudnnLossNormalizationMode_t* normMode, cudnnNanPropagation_t* gradMode);
+typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossDescriptor_v8(cudnnCTCLossDescriptor_t ctcLossDesc, cudnnDataType_t* compType, cudnnLossNormalizationMode_t* normMode, cudnnNanPropagation_t* gradMode, int* maxLabelLength);
+typedef cudnnStatus_t CUDAAPI tcudnnDestroyCTCLossDescriptor(cudnnCTCLossDescriptor_t ctcLossDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnCTCLoss(cudnnHandle_t handle, const cudnnTensorDescriptor_t probsDesc, const void* probs, const int hostLabels[], const int hostLabelLengths[], const int hostInputLengths[], void* costs, const cudnnTensorDescriptor_t gradientsDesc, void* gradients, cudnnCTCLossAlgo_t algo, cudnnCTCLossDescriptor_t ctcLossDesc, void* workspace, size_t workSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnCTCLoss_v8(cudnnHandle_t handle, cudnnCTCLossAlgo_t algo, cudnnCTCLossDescriptor_t ctcLossDesc, const cudnnTensorDescriptor_t probsDesc, const void* probs, const int labels[], const int labelLengths[], const int inputLengths[], void* costs, const cudnnTensorDescriptor_t gradientsDesc, void* gradients, size_t workSpaceSizeInBytes, void* workspace);
+typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossWorkspaceSize(cudnnHandle_t handle, const cudnnTensorDescriptor_t probsDesc, const cudnnTensorDescriptor_t gradientsDesc, const int* labels, const int* labelLengths, const int* inputLengths, cudnnCTCLossAlgo_t algo, cudnnCTCLossDescriptor_t ctcLossDesc, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetCTCLossWorkspaceSize_v8(cudnnHandle_t handle, cudnnCTCLossAlgo_t algo, cudnnCTCLossDescriptor_t ctcLossDesc, const cudnnTensorDescriptor_t probsDesc, const cudnnTensorDescriptor_t gradientsDesc, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnAdvTrainVersionCheck(void);
+typedef cudnnStatus_t CUDAAPI tcudnnCreateConvolutionDescriptor(cudnnConvolutionDescriptor_t* convDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnDestroyConvolutionDescriptor(cudnnConvolutionDescriptor_t convDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionMathType(cudnnConvolutionDescriptor_t convDesc, cudnnMathType_t mathType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionMathType(cudnnConvolutionDescriptor_t convDesc, cudnnMathType_t* mathType);
+typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionGroupCount(cudnnConvolutionDescriptor_t convDesc, int groupCount);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionGroupCount(cudnnConvolutionDescriptor_t convDesc, int* groupCount);
+typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionReorderType(cudnnConvolutionDescriptor_t convDesc, cudnnReorderType_t reorderType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionReorderType(cudnnConvolutionDescriptor_t convDesc, cudnnReorderType_t* reorderType);
+typedef cudnnStatus_t CUDAAPI tcudnnSetConvolution2dDescriptor(cudnnConvolutionDescriptor_t convDesc, int pad_h, int pad_w, int u, int v, int dilation_h, int dilation_w, cudnnConvolutionMode_t mode, cudnnDataType_t computeType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolution2dDescriptor(const cudnnConvolutionDescriptor_t convDesc, int* pad_h, int* pad_w, int* u, int* v, int* dilation_h, int* dilation_w, cudnnConvolutionMode_t* mode, cudnnDataType_t* computeType);
+typedef cudnnStatus_t CUDAAPI tcudnnSetConvolutionNdDescriptor(cudnnConvolutionDescriptor_t convDesc, int arrayLength, const int padA[], const int filterStrideA[], const int dilationA[], cudnnConvolutionMode_t mode, cudnnDataType_t computeType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionNdDescriptor(const cudnnConvolutionDescriptor_t convDesc, int arrayLengthRequested, int* arrayLength, int padA[], int strideA[], int dilationA[], cudnnConvolutionMode_t* mode, cudnnDataType_t* computeType);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolution2dForwardOutputDim(const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t inputTensorDesc, const cudnnFilterDescriptor_t filterDesc, int* n, int* c, int* h, int* w);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionNdForwardOutputDim(const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t inputTensorDesc, const cudnnFilterDescriptor_t filterDesc, int nbDims, int tensorOuputDimA[]);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionForwardAlgorithmMaxCount(cudnnHandle_t handle, int* count);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionForwardAlgorithm_v7(cudnnHandle_t handle, const cudnnTensorDescriptor_t srcDesc, const cudnnFilterDescriptor_t filterDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t destDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionFwdAlgoPerf_t* perfResults);
+typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionForwardAlgorithm(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t yDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionFwdAlgoPerf_t* perfResults);
+typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionForwardAlgorithmEx(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t yDesc, void* y, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionFwdAlgoPerf_t* perfResults, void* workSpace, size_t workSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnIm2Col(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const cudnnConvolutionDescriptor_t convDesc, void* colBuffer);
+typedef cudnnStatus_t CUDAAPI tcudnnReorderFilterAndBias(cudnnHandle_t handle, const cudnnFilterDescriptor_t filterDesc, cudnnReorderType_t reorderType, const void* filterData, void* reorderedFilterData, int reorderBias, const void* biasData, void* reorderedBiasData);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionForwardWorkspaceSize(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnFilterDescriptor_t wDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t yDesc, cudnnConvolutionFwdAlgo_t algo, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnConvolutionForward(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionFwdAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* beta, const cudnnTensorDescriptor_t yDesc, void* y);
+typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBiasActivationForward(cudnnHandle_t handle, const void* alpha1, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionFwdAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* alpha2, const cudnnTensorDescriptor_t zDesc, const void* z, const cudnnTensorDescriptor_t biasDesc, const void* bias, const cudnnActivationDescriptor_t activationDesc, const cudnnTensorDescriptor_t yDesc, void* y);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardDataAlgorithmMaxCount(cudnnHandle_t handle, int* count);
+typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardDataAlgorithm(cudnnHandle_t handle, const cudnnFilterDescriptor_t wDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t dxDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdDataAlgoPerf_t* perfResults);
+typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardDataAlgorithmEx(cudnnHandle_t handle, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t dxDesc, void* dx, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdDataAlgoPerf_t* perfResults, void* workSpace, size_t workSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardDataAlgorithm_v7(cudnnHandle_t handle, const cudnnFilterDescriptor_t filterDesc, const cudnnTensorDescriptor_t diffDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t gradDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdDataAlgoPerf_t* perfResults);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardDataWorkspaceSize(cudnnHandle_t handle, const cudnnFilterDescriptor_t wDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t dxDesc, cudnnConvolutionBwdDataAlgo_t algo, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBackwardData(cudnnHandle_t handle, const void* alpha, const cudnnFilterDescriptor_t wDesc, const void* w, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionBwdDataAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* beta, const cudnnTensorDescriptor_t dxDesc, void* dx);
+typedef cudnnStatus_t CUDAAPI tcudnnGetFoldedConvBackwardDataDescriptors(const cudnnHandle_t handle, const cudnnFilterDescriptor_t filterDesc, const cudnnTensorDescriptor_t diffDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnTensorDescriptor_t gradDesc, const cudnnTensorFormat_t transformFormat, cudnnFilterDescriptor_t foldedFilterDesc, cudnnTensorDescriptor_t paddedDiffDesc, cudnnConvolutionDescriptor_t foldedConvDesc, cudnnTensorDescriptor_t foldedGradDesc, cudnnTensorTransformDescriptor_t filterFoldTransDesc, cudnnTensorTransformDescriptor_t diffPadTransDesc, cudnnTensorTransformDescriptor_t gradFoldTransDesc, cudnnTensorTransformDescriptor_t gradUnfoldTransDesc);
+typedef cudnnStatus_t CUDAAPI tcudnnCnnInferVersionCheck(void);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardFilterAlgorithmMaxCount(cudnnHandle_t handle, int* count);
+typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardFilterAlgorithm(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t dwDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdFilterAlgoPerf_t* perfResults);
+typedef cudnnStatus_t CUDAAPI tcudnnFindConvolutionBackwardFilterAlgorithmEx(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t dyDesc, const void* y, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t dwDesc, void* dw, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdFilterAlgoPerf_t* perfResults, void* workSpace, size_t workSpaceSizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardFilterAlgorithm_v7(cudnnHandle_t handle, const cudnnTensorDescriptor_t srcDesc, const cudnnTensorDescriptor_t diffDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t gradDesc, const int requestedAlgoCount, int* returnedAlgoCount, cudnnConvolutionBwdFilterAlgoPerf_t* perfResults);
+typedef cudnnStatus_t CUDAAPI tcudnnGetConvolutionBackwardFilterWorkspaceSize(cudnnHandle_t handle, const cudnnTensorDescriptor_t xDesc, const cudnnTensorDescriptor_t dyDesc, const cudnnConvolutionDescriptor_t convDesc, const cudnnFilterDescriptor_t gradDesc, cudnnConvolutionBwdFilterAlgo_t algo, size_t* sizeInBytes);
+typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBackwardFilter(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t xDesc, const void* x, const cudnnTensorDescriptor_t dyDesc, const void* dy, const cudnnConvolutionDescriptor_t convDesc, cudnnConvolutionBwdFilterAlgo_t algo, void* workSpace, size_t workSpaceSizeInBytes, const void* beta, const cudnnFilterDescriptor_t dwDesc, void* dw);
+typedef cudnnStatus_t CUDAAPI tcudnnConvolutionBackwardBias(cudnnHandle_t handle, const void* alpha, const cudnnTensorDescriptor_t dyDesc, const void* dy, const void* beta, const cudnnTensorDescriptor_t dbDesc, void* db);
 typedef cudnnStatus_t CUDAAPI tcudnnCreateFusedOpsConstParamPack(cudnnFusedOpsConstParamPack_t* constPack, cudnnFusedOps_t ops);
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyFusedOpsConstParamPack(cudnnFusedOpsConstParamPack_t constPack);
 typedef cudnnStatus_t CUDAAPI tcudnnSetFusedOpsConstParamPackAttribute(cudnnFusedOpsConstParamPack_t constPack, cudnnFusedOpsConstParamLabel_t paramLabel, const void* param);
@@ -2028,8 +2423,14 @@ typedef cudnnStatus_t CUDAAPI tcudnnCreateFusedOpsPlan(cudnnFusedOpsPlan_t* plan
 typedef cudnnStatus_t CUDAAPI tcudnnDestroyFusedOpsPlan(cudnnFusedOpsPlan_t plan);
 typedef cudnnStatus_t CUDAAPI tcudnnMakeFusedOpsPlan(cudnnHandle_t handle, cudnnFusedOpsPlan_t plan, const cudnnFusedOpsConstParamPack_t constPack, size_t* workspaceSizeInBytes);
 typedef cudnnStatus_t CUDAAPI tcudnnFusedOpsExecute(cudnnHandle_t handle, const cudnnFusedOpsPlan_t plan, cudnnFusedOpsVariantParamPack_t varPack);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNDescriptor_v6(cudnnHandle_t handle, cudnnRNNDescriptor_t rnnDesc, const int hiddenSize, const int numLayers, cudnnDropoutDescriptor_t dropoutDesc, cudnnRNNInputMode_t inputMode, cudnnDirectionMode_t direction, cudnnRNNMode_t mode, cudnnRNNAlgo_t algo, cudnnDataType_t mathPrec);
-typedef cudnnStatus_t CUDAAPI tcudnnSetRNNDescriptor_v5(cudnnRNNDescriptor_t rnnDesc, int hiddenSize, int numLayers, cudnnDropoutDescriptor_t dropoutDesc, cudnnRNNInputMode_t inputMode, cudnnDirectionMode_t direction, cudnnRNNMode_t mode, cudnnDataType_t mathPrec);
+typedef cudnnStatus_t CUDAAPI tcudnnCnnTrainVersionCheck(void);
+typedef cudnnStatus_t CUDAAPI tcudnnBackendCreateDescriptor(cudnnBackendDescriptorType_t descriptorType, cudnnBackendDescriptor_t* descriptor);
+typedef cudnnStatus_t CUDAAPI tcudnnBackendDestroyDescriptor(cudnnBackendDescriptor_t descriptor);
+typedef cudnnStatus_t CUDAAPI tcudnnBackendInitialize(cudnnBackendDescriptor_t descriptor);
+typedef cudnnStatus_t CUDAAPI tcudnnBackendFinalize(cudnnBackendDescriptor_t descriptor);
+typedef cudnnStatus_t CUDAAPI tcudnnBackendSetAttribute(cudnnBackendDescriptor_t descriptor, cudnnBackendAttributeName_t attributeName, cudnnBackendAttributeType_t attributeType, int64_t elementCount, const void* arrayOfElements);
+typedef cudnnStatus_t CUDAAPI tcudnnBackendGetAttribute(const cudnnBackendDescriptor_t descriptor, cudnnBackendAttributeName_t attributeName, cudnnBackendAttributeType_t attributeType, int64_t requestedElementCount, int64_t* elementCount, void* arrayOfElements);
+typedef cudnnStatus_t CUDAAPI tcudnnBackendExecute(cudnnHandle_t handle, cudnnBackendDescriptor_t executionPlan, cudnnBackendDescriptor_t variantPack);
 
 
 /* Function declarations. */
@@ -2043,13 +2444,14 @@ extern tcuDeviceGetName *cuDeviceGetName;
 extern tcuDeviceGetUuid *cuDeviceGetUuid;
 extern tcuDeviceTotalMem_v2 *cuDeviceTotalMem_v2;
 extern tcuDeviceGetAttribute *cuDeviceGetAttribute;
+extern tcuDeviceGetNvSciSyncAttributes *cuDeviceGetNvSciSyncAttributes;
 extern tcuDeviceGetProperties *cuDeviceGetProperties;
 extern tcuDeviceComputeCapability *cuDeviceComputeCapability;
 extern tcuDevicePrimaryCtxRetain *cuDevicePrimaryCtxRetain;
-extern tcuDevicePrimaryCtxRelease *cuDevicePrimaryCtxRelease;
-extern tcuDevicePrimaryCtxSetFlags *cuDevicePrimaryCtxSetFlags;
+extern tcuDevicePrimaryCtxRelease_v2 *cuDevicePrimaryCtxRelease_v2;
+extern tcuDevicePrimaryCtxSetFlags_v2 *cuDevicePrimaryCtxSetFlags_v2;
 extern tcuDevicePrimaryCtxGetState *cuDevicePrimaryCtxGetState;
-extern tcuDevicePrimaryCtxReset *cuDevicePrimaryCtxReset;
+extern tcuDevicePrimaryCtxReset_v2 *cuDevicePrimaryCtxReset_v2;
 extern tcuCtxCreate_v2 *cuCtxCreate_v2;
 extern tcuCtxDestroy_v2 *cuCtxDestroy_v2;
 extern tcuCtxPushCurrent_v2 *cuCtxPushCurrent_v2;
@@ -2067,6 +2469,7 @@ extern tcuCtxGetSharedMemConfig *cuCtxGetSharedMemConfig;
 extern tcuCtxSetSharedMemConfig *cuCtxSetSharedMemConfig;
 extern tcuCtxGetApiVersion *cuCtxGetApiVersion;
 extern tcuCtxGetStreamPriorityRange *cuCtxGetStreamPriorityRange;
+extern tcuCtxResetPersistingL2Cache *cuCtxResetPersistingL2Cache;
 extern tcuCtxAttach *cuCtxAttach;
 extern tcuCtxDetach *cuCtxDetach;
 extern tcuModuleLoad *cuModuleLoad;
@@ -2147,6 +2550,19 @@ extern tcuArray3DGetDescriptor_v2 *cuArray3DGetDescriptor_v2;
 extern tcuMipmappedArrayCreate *cuMipmappedArrayCreate;
 extern tcuMipmappedArrayGetLevel *cuMipmappedArrayGetLevel;
 extern tcuMipmappedArrayDestroy *cuMipmappedArrayDestroy;
+extern tcuMemAddressReserve *cuMemAddressReserve;
+extern tcuMemAddressFree *cuMemAddressFree;
+extern tcuMemCreate *cuMemCreate;
+extern tcuMemRelease *cuMemRelease;
+extern tcuMemMap *cuMemMap;
+extern tcuMemUnmap *cuMemUnmap;
+extern tcuMemSetAccess *cuMemSetAccess;
+extern tcuMemGetAccess *cuMemGetAccess;
+extern tcuMemExportToShareableHandle *cuMemExportToShareableHandle;
+extern tcuMemImportFromShareableHandle *cuMemImportFromShareableHandle;
+extern tcuMemGetAllocationGranularity *cuMemGetAllocationGranularity;
+extern tcuMemGetAllocationPropertiesFromHandle *cuMemGetAllocationPropertiesFromHandle;
+extern tcuMemRetainAllocationHandle *cuMemRetainAllocationHandle;
 extern tcuPointerGetAttribute *cuPointerGetAttribute;
 extern tcuMemPrefetchAsync *cuMemPrefetchAsync;
 extern tcuMemAdvise *cuMemAdvise;
@@ -2170,6 +2586,9 @@ extern tcuStreamAttachMemAsync *cuStreamAttachMemAsync;
 extern tcuStreamQuery *cuStreamQuery;
 extern tcuStreamSynchronize *cuStreamSynchronize;
 extern tcuStreamDestroy_v2 *cuStreamDestroy_v2;
+extern tcuStreamCopyAttributes *cuStreamCopyAttributes;
+extern tcuStreamGetAttribute *cuStreamGetAttribute;
+extern tcuStreamSetAttribute *cuStreamSetAttribute;
 extern tcuEventCreate *cuEventCreate;
 extern tcuEventRecord *cuEventRecord;
 extern tcuEventQuery *cuEventQuery;
@@ -2234,15 +2653,23 @@ extern tcuGraphNodeGetDependentNodes *cuGraphNodeGetDependentNodes;
 extern tcuGraphAddDependencies *cuGraphAddDependencies;
 extern tcuGraphRemoveDependencies *cuGraphRemoveDependencies;
 extern tcuGraphDestroyNode *cuGraphDestroyNode;
-extern tcuGraphInstantiate *cuGraphInstantiate;
+extern tcuGraphInstantiate_v2 *cuGraphInstantiate_v2;
 extern tcuGraphExecKernelNodeSetParams *cuGraphExecKernelNodeSetParams;
+extern tcuGraphExecMemcpyNodeSetParams *cuGraphExecMemcpyNodeSetParams;
+extern tcuGraphExecMemsetNodeSetParams *cuGraphExecMemsetNodeSetParams;
+extern tcuGraphExecHostNodeSetParams *cuGraphExecHostNodeSetParams;
 extern tcuGraphLaunch *cuGraphLaunch;
 extern tcuGraphExecDestroy *cuGraphExecDestroy;
 extern tcuGraphDestroy *cuGraphDestroy;
+extern tcuGraphExecUpdate *cuGraphExecUpdate;
+extern tcuGraphKernelNodeCopyAttributes *cuGraphKernelNodeCopyAttributes;
+extern tcuGraphKernelNodeGetAttribute *cuGraphKernelNodeGetAttribute;
+extern tcuGraphKernelNodeSetAttribute *cuGraphKernelNodeSetAttribute;
 extern tcuOccupancyMaxActiveBlocksPerMultiprocessor *cuOccupancyMaxActiveBlocksPerMultiprocessor;
 extern tcuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags *cuOccupancyMaxActiveBlocksPerMultiprocessorWithFlags;
 extern tcuOccupancyMaxPotentialBlockSize *cuOccupancyMaxPotentialBlockSize;
 extern tcuOccupancyMaxPotentialBlockSizeWithFlags *cuOccupancyMaxPotentialBlockSizeWithFlags;
+extern tcuOccupancyAvailableDynamicSMemPerBlock *cuOccupancyAvailableDynamicSMemPerBlock;
 extern tcuTexRefSetArray *cuTexRefSetArray;
 extern tcuTexRefSetMipmappedArray *cuTexRefSetMipmappedArray;
 extern tcuTexRefSetAddress_v2 *cuTexRefSetAddress_v2;
@@ -2292,6 +2719,7 @@ extern tcuGraphicsResourceSetMapFlags_v2 *cuGraphicsResourceSetMapFlags_v2;
 extern tcuGraphicsMapResources *cuGraphicsMapResources;
 extern tcuGraphicsUnmapResources *cuGraphicsUnmapResources;
 extern tcuGetExportTable *cuGetExportTable;
+extern tcuFuncGetModule *cuFuncGetModule;
 
 extern tnvrtcGetErrorString *nvrtcGetErrorString;
 extern tnvrtcVersion *nvrtcVersion;
@@ -2330,7 +2758,6 @@ extern tcudnnGetTensorTransformDescriptor *cudnnGetTensorTransformDescriptor;
 extern tcudnnDestroyTensorTransformDescriptor *cudnnDestroyTensorTransformDescriptor;
 extern tcudnnTransformTensor *cudnnTransformTensor;
 extern tcudnnTransformTensorEx *cudnnTransformTensorEx;
-extern tcudnnGetFoldedConvBackwardDataDescriptors *cudnnGetFoldedConvBackwardDataDescriptors;
 extern tcudnnAddTensor *cudnnAddTensor;
 extern tcudnnCreateOpTensorDescriptor *cudnnCreateOpTensorDescriptor;
 extern tcudnnSetOpTensorDescriptor *cudnnSetOpTensorDescriptor;
@@ -2354,47 +2781,7 @@ extern tcudnnGetFilterNdDescriptor *cudnnGetFilterNdDescriptor;
 extern tcudnnGetFilterSizeInBytes *cudnnGetFilterSizeInBytes;
 extern tcudnnTransformFilter *cudnnTransformFilter;
 extern tcudnnDestroyFilterDescriptor *cudnnDestroyFilterDescriptor;
-extern tcudnnReorderFilterAndBias *cudnnReorderFilterAndBias;
-extern tcudnnCreateConvolutionDescriptor *cudnnCreateConvolutionDescriptor;
-extern tcudnnSetConvolutionMathType *cudnnSetConvolutionMathType;
-extern tcudnnGetConvolutionMathType *cudnnGetConvolutionMathType;
-extern tcudnnSetConvolutionGroupCount *cudnnSetConvolutionGroupCount;
-extern tcudnnGetConvolutionGroupCount *cudnnGetConvolutionGroupCount;
-extern tcudnnSetConvolutionReorderType *cudnnSetConvolutionReorderType;
-extern tcudnnGetConvolutionReorderType *cudnnGetConvolutionReorderType;
-extern tcudnnSetConvolution2dDescriptor *cudnnSetConvolution2dDescriptor;
-extern tcudnnGetConvolution2dDescriptor *cudnnGetConvolution2dDescriptor;
-extern tcudnnGetConvolution2dForwardOutputDim *cudnnGetConvolution2dForwardOutputDim;
-extern tcudnnSetConvolutionNdDescriptor *cudnnSetConvolutionNdDescriptor;
-extern tcudnnGetConvolutionNdDescriptor *cudnnGetConvolutionNdDescriptor;
-extern tcudnnGetConvolutionNdForwardOutputDim *cudnnGetConvolutionNdForwardOutputDim;
-extern tcudnnDestroyConvolutionDescriptor *cudnnDestroyConvolutionDescriptor;
-extern tcudnnGetConvolutionForwardAlgorithmMaxCount *cudnnGetConvolutionForwardAlgorithmMaxCount;
-extern tcudnnFindConvolutionForwardAlgorithm *cudnnFindConvolutionForwardAlgorithm;
-extern tcudnnFindConvolutionForwardAlgorithmEx *cudnnFindConvolutionForwardAlgorithmEx;
-extern tcudnnGetConvolutionForwardAlgorithm *cudnnGetConvolutionForwardAlgorithm;
-extern tcudnnGetConvolutionForwardAlgorithm_v7 *cudnnGetConvolutionForwardAlgorithm_v7;
-extern tcudnnGetConvolutionForwardWorkspaceSize *cudnnGetConvolutionForwardWorkspaceSize;
-extern tcudnnConvolutionForward *cudnnConvolutionForward;
-extern tcudnnConvolutionBiasActivationForward *cudnnConvolutionBiasActivationForward;
-extern tcudnnConvolutionBackwardBias *cudnnConvolutionBackwardBias;
-extern tcudnnGetConvolutionBackwardFilterAlgorithmMaxCount *cudnnGetConvolutionBackwardFilterAlgorithmMaxCount;
-extern tcudnnFindConvolutionBackwardFilterAlgorithm *cudnnFindConvolutionBackwardFilterAlgorithm;
-extern tcudnnFindConvolutionBackwardFilterAlgorithmEx *cudnnFindConvolutionBackwardFilterAlgorithmEx;
-extern tcudnnGetConvolutionBackwardFilterAlgorithm *cudnnGetConvolutionBackwardFilterAlgorithm;
-extern tcudnnGetConvolutionBackwardFilterAlgorithm_v7 *cudnnGetConvolutionBackwardFilterAlgorithm_v7;
-extern tcudnnGetConvolutionBackwardFilterWorkspaceSize *cudnnGetConvolutionBackwardFilterWorkspaceSize;
-extern tcudnnConvolutionBackwardFilter *cudnnConvolutionBackwardFilter;
-extern tcudnnGetConvolutionBackwardDataAlgorithmMaxCount *cudnnGetConvolutionBackwardDataAlgorithmMaxCount;
-extern tcudnnFindConvolutionBackwardDataAlgorithm *cudnnFindConvolutionBackwardDataAlgorithm;
-extern tcudnnFindConvolutionBackwardDataAlgorithmEx *cudnnFindConvolutionBackwardDataAlgorithmEx;
-extern tcudnnGetConvolutionBackwardDataAlgorithm *cudnnGetConvolutionBackwardDataAlgorithm;
-extern tcudnnGetConvolutionBackwardDataAlgorithm_v7 *cudnnGetConvolutionBackwardDataAlgorithm_v7;
-extern tcudnnGetConvolutionBackwardDataWorkspaceSize *cudnnGetConvolutionBackwardDataWorkspaceSize;
-extern tcudnnConvolutionBackwardData *cudnnConvolutionBackwardData;
-extern tcudnnIm2Col *cudnnIm2Col;
 extern tcudnnSoftmaxForward *cudnnSoftmaxForward;
-extern tcudnnSoftmaxBackward *cudnnSoftmaxBackward;
 extern tcudnnCreatePoolingDescriptor *cudnnCreatePoolingDescriptor;
 extern tcudnnSetPooling2dDescriptor *cudnnSetPooling2dDescriptor;
 extern tcudnnGetPooling2dDescriptor *cudnnGetPooling2dDescriptor;
@@ -2404,37 +2791,26 @@ extern tcudnnGetPoolingNdForwardOutputDim *cudnnGetPoolingNdForwardOutputDim;
 extern tcudnnGetPooling2dForwardOutputDim *cudnnGetPooling2dForwardOutputDim;
 extern tcudnnDestroyPoolingDescriptor *cudnnDestroyPoolingDescriptor;
 extern tcudnnPoolingForward *cudnnPoolingForward;
-extern tcudnnPoolingBackward *cudnnPoolingBackward;
 extern tcudnnCreateActivationDescriptor *cudnnCreateActivationDescriptor;
 extern tcudnnSetActivationDescriptor *cudnnSetActivationDescriptor;
 extern tcudnnGetActivationDescriptor *cudnnGetActivationDescriptor;
 extern tcudnnDestroyActivationDescriptor *cudnnDestroyActivationDescriptor;
 extern tcudnnActivationForward *cudnnActivationForward;
-extern tcudnnActivationBackward *cudnnActivationBackward;
 extern tcudnnCreateLRNDescriptor *cudnnCreateLRNDescriptor;
 extern tcudnnSetLRNDescriptor *cudnnSetLRNDescriptor;
 extern tcudnnGetLRNDescriptor *cudnnGetLRNDescriptor;
 extern tcudnnDestroyLRNDescriptor *cudnnDestroyLRNDescriptor;
 extern tcudnnLRNCrossChannelForward *cudnnLRNCrossChannelForward;
-extern tcudnnLRNCrossChannelBackward *cudnnLRNCrossChannelBackward;
 extern tcudnnDivisiveNormalizationForward *cudnnDivisiveNormalizationForward;
-extern tcudnnDivisiveNormalizationBackward *cudnnDivisiveNormalizationBackward;
 extern tcudnnDeriveBNTensorDescriptor *cudnnDeriveBNTensorDescriptor;
-extern tcudnnGetBatchNormalizationForwardTrainingExWorkspaceSize *cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize;
-extern tcudnnGetBatchNormalizationBackwardExWorkspaceSize *cudnnGetBatchNormalizationBackwardExWorkspaceSize;
-extern tcudnnGetBatchNormalizationTrainingExReserveSpaceSize *cudnnGetBatchNormalizationTrainingExReserveSpaceSize;
-extern tcudnnBatchNormalizationForwardTraining *cudnnBatchNormalizationForwardTraining;
-extern tcudnnBatchNormalizationForwardTrainingEx *cudnnBatchNormalizationForwardTrainingEx;
 extern tcudnnBatchNormalizationForwardInference *cudnnBatchNormalizationForwardInference;
-extern tcudnnBatchNormalizationBackward *cudnnBatchNormalizationBackward;
-extern tcudnnBatchNormalizationBackwardEx *cudnnBatchNormalizationBackwardEx;
+extern tcudnnDeriveNormTensorDescriptor *cudnnDeriveNormTensorDescriptor;
+extern tcudnnNormalizationForwardInference *cudnnNormalizationForwardInference;
 extern tcudnnCreateSpatialTransformerDescriptor *cudnnCreateSpatialTransformerDescriptor;
 extern tcudnnSetSpatialTransformerNdDescriptor *cudnnSetSpatialTransformerNdDescriptor;
 extern tcudnnDestroySpatialTransformerDescriptor *cudnnDestroySpatialTransformerDescriptor;
 extern tcudnnSpatialTfGridGeneratorForward *cudnnSpatialTfGridGeneratorForward;
-extern tcudnnSpatialTfGridGeneratorBackward *cudnnSpatialTfGridGeneratorBackward;
 extern tcudnnSpatialTfSamplerForward *cudnnSpatialTfSamplerForward;
-extern tcudnnSpatialTfSamplerBackward *cudnnSpatialTfSamplerBackward;
 extern tcudnnCreateDropoutDescriptor *cudnnCreateDropoutDescriptor;
 extern tcudnnDestroyDropoutDescriptor *cudnnDestroyDropoutDescriptor;
 extern tcudnnDropoutGetStatesSize *cudnnDropoutGetStatesSize;
@@ -2443,71 +2819,6 @@ extern tcudnnSetDropoutDescriptor *cudnnSetDropoutDescriptor;
 extern tcudnnRestoreDropoutDescriptor *cudnnRestoreDropoutDescriptor;
 extern tcudnnGetDropoutDescriptor *cudnnGetDropoutDescriptor;
 extern tcudnnDropoutForward *cudnnDropoutForward;
-extern tcudnnDropoutBackward *cudnnDropoutBackward;
-extern tcudnnCreateRNNDescriptor *cudnnCreateRNNDescriptor;
-extern tcudnnDestroyRNNDescriptor *cudnnDestroyRNNDescriptor;
-extern tcudnnSetRNNDescriptor *cudnnSetRNNDescriptor;
-extern tcudnnGetRNNDescriptor *cudnnGetRNNDescriptor;
-extern tcudnnSetRNNMatrixMathType *cudnnSetRNNMatrixMathType;
-extern tcudnnGetRNNMatrixMathType *cudnnGetRNNMatrixMathType;
-extern tcudnnSetRNNBiasMode *cudnnSetRNNBiasMode;
-extern tcudnnGetRNNBiasMode *cudnnGetRNNBiasMode;
-extern tcudnnRNNSetClip *cudnnRNNSetClip;
-extern tcudnnRNNGetClip *cudnnRNNGetClip;
-extern tcudnnSetRNNProjectionLayers *cudnnSetRNNProjectionLayers;
-extern tcudnnGetRNNProjectionLayers *cudnnGetRNNProjectionLayers;
-extern tcudnnCreatePersistentRNNPlan *cudnnCreatePersistentRNNPlan;
-extern tcudnnDestroyPersistentRNNPlan *cudnnDestroyPersistentRNNPlan;
-extern tcudnnSetPersistentRNNPlan *cudnnSetPersistentRNNPlan;
-extern tcudnnGetRNNWorkspaceSize *cudnnGetRNNWorkspaceSize;
-extern tcudnnGetRNNTrainingReserveSize *cudnnGetRNNTrainingReserveSize;
-extern tcudnnGetRNNParamsSize *cudnnGetRNNParamsSize;
-extern tcudnnGetRNNLinLayerMatrixParams *cudnnGetRNNLinLayerMatrixParams;
-extern tcudnnGetRNNLinLayerBiasParams *cudnnGetRNNLinLayerBiasParams;
-extern tcudnnRNNForwardInference *cudnnRNNForwardInference;
-extern tcudnnRNNForwardTraining *cudnnRNNForwardTraining;
-extern tcudnnRNNBackwardData *cudnnRNNBackwardData;
-extern tcudnnRNNBackwardWeights *cudnnRNNBackwardWeights;
-extern tcudnnSetRNNPaddingMode *cudnnSetRNNPaddingMode;
-extern tcudnnGetRNNPaddingMode *cudnnGetRNNPaddingMode;
-extern tcudnnCreateRNNDataDescriptor *cudnnCreateRNNDataDescriptor;
-extern tcudnnDestroyRNNDataDescriptor *cudnnDestroyRNNDataDescriptor;
-extern tcudnnSetRNNDataDescriptor *cudnnSetRNNDataDescriptor;
-extern tcudnnGetRNNDataDescriptor *cudnnGetRNNDataDescriptor;
-extern tcudnnRNNForwardTrainingEx *cudnnRNNForwardTrainingEx;
-extern tcudnnRNNForwardInferenceEx *cudnnRNNForwardInferenceEx;
-extern tcudnnRNNBackwardDataEx *cudnnRNNBackwardDataEx;
-extern tcudnnRNNBackwardWeightsEx *cudnnRNNBackwardWeightsEx;
-extern tcudnnSetRNNAlgorithmDescriptor *cudnnSetRNNAlgorithmDescriptor;
-extern tcudnnGetRNNForwardInferenceAlgorithmMaxCount *cudnnGetRNNForwardInferenceAlgorithmMaxCount;
-extern tcudnnFindRNNForwardInferenceAlgorithmEx *cudnnFindRNNForwardInferenceAlgorithmEx;
-extern tcudnnGetRNNForwardTrainingAlgorithmMaxCount *cudnnGetRNNForwardTrainingAlgorithmMaxCount;
-extern tcudnnFindRNNForwardTrainingAlgorithmEx *cudnnFindRNNForwardTrainingAlgorithmEx;
-extern tcudnnGetRNNBackwardDataAlgorithmMaxCount *cudnnGetRNNBackwardDataAlgorithmMaxCount;
-extern tcudnnFindRNNBackwardDataAlgorithmEx *cudnnFindRNNBackwardDataAlgorithmEx;
-extern tcudnnGetRNNBackwardWeightsAlgorithmMaxCount *cudnnGetRNNBackwardWeightsAlgorithmMaxCount;
-extern tcudnnFindRNNBackwardWeightsAlgorithmEx *cudnnFindRNNBackwardWeightsAlgorithmEx;
-extern tcudnnCreateSeqDataDescriptor *cudnnCreateSeqDataDescriptor;
-extern tcudnnDestroySeqDataDescriptor *cudnnDestroySeqDataDescriptor;
-extern tcudnnSetSeqDataDescriptor *cudnnSetSeqDataDescriptor;
-extern tcudnnGetSeqDataDescriptor *cudnnGetSeqDataDescriptor;
-extern tcudnnCreateAttnDescriptor *cudnnCreateAttnDescriptor;
-extern tcudnnDestroyAttnDescriptor *cudnnDestroyAttnDescriptor;
-extern tcudnnSetAttnDescriptor *cudnnSetAttnDescriptor;
-extern tcudnnGetAttnDescriptor *cudnnGetAttnDescriptor;
-extern tcudnnGetMultiHeadAttnBuffers *cudnnGetMultiHeadAttnBuffers;
-extern tcudnnGetMultiHeadAttnWeights *cudnnGetMultiHeadAttnWeights;
-extern tcudnnMultiHeadAttnForward *cudnnMultiHeadAttnForward;
-extern tcudnnMultiHeadAttnBackwardData *cudnnMultiHeadAttnBackwardData;
-extern tcudnnMultiHeadAttnBackwardWeights *cudnnMultiHeadAttnBackwardWeights;
-extern tcudnnCreateCTCLossDescriptor *cudnnCreateCTCLossDescriptor;
-extern tcudnnSetCTCLossDescriptor *cudnnSetCTCLossDescriptor;
-extern tcudnnSetCTCLossDescriptorEx *cudnnSetCTCLossDescriptorEx;
-extern tcudnnGetCTCLossDescriptor *cudnnGetCTCLossDescriptor;
-extern tcudnnGetCTCLossDescriptorEx *cudnnGetCTCLossDescriptorEx;
-extern tcudnnDestroyCTCLossDescriptor *cudnnDestroyCTCLossDescriptor;
-extern tcudnnCTCLoss *cudnnCTCLoss;
-extern tcudnnGetCTCLossWorkspaceSize *cudnnGetCTCLossWorkspaceSize;
 extern tcudnnCreateAlgorithmDescriptor *cudnnCreateAlgorithmDescriptor;
 extern tcudnnSetAlgorithmDescriptor *cudnnSetAlgorithmDescriptor;
 extern tcudnnGetAlgorithmDescriptor *cudnnGetAlgorithmDescriptor;
@@ -2522,6 +2833,147 @@ extern tcudnnSaveAlgorithm *cudnnSaveAlgorithm;
 extern tcudnnRestoreAlgorithm *cudnnRestoreAlgorithm;
 extern tcudnnSetCallback *cudnnSetCallback;
 extern tcudnnGetCallback *cudnnGetCallback;
+extern tcudnnOpsInferVersionCheck *cudnnOpsInferVersionCheck;
+extern tcudnnSoftmaxBackward *cudnnSoftmaxBackward;
+extern tcudnnPoolingBackward *cudnnPoolingBackward;
+extern tcudnnActivationBackward *cudnnActivationBackward;
+extern tcudnnLRNCrossChannelBackward *cudnnLRNCrossChannelBackward;
+extern tcudnnDivisiveNormalizationBackward *cudnnDivisiveNormalizationBackward;
+extern tcudnnGetBatchNormalizationForwardTrainingExWorkspaceSize *cudnnGetBatchNormalizationForwardTrainingExWorkspaceSize;
+extern tcudnnGetBatchNormalizationBackwardExWorkspaceSize *cudnnGetBatchNormalizationBackwardExWorkspaceSize;
+extern tcudnnGetBatchNormalizationTrainingExReserveSpaceSize *cudnnGetBatchNormalizationTrainingExReserveSpaceSize;
+extern tcudnnBatchNormalizationForwardTraining *cudnnBatchNormalizationForwardTraining;
+extern tcudnnBatchNormalizationForwardTrainingEx *cudnnBatchNormalizationForwardTrainingEx;
+extern tcudnnBatchNormalizationBackward *cudnnBatchNormalizationBackward;
+extern tcudnnBatchNormalizationBackwardEx *cudnnBatchNormalizationBackwardEx;
+extern tcudnnGetNormalizationForwardTrainingWorkspaceSize *cudnnGetNormalizationForwardTrainingWorkspaceSize;
+extern tcudnnGetNormalizationBackwardWorkspaceSize *cudnnGetNormalizationBackwardWorkspaceSize;
+extern tcudnnGetNormalizationTrainingReserveSpaceSize *cudnnGetNormalizationTrainingReserveSpaceSize;
+extern tcudnnNormalizationForwardTraining *cudnnNormalizationForwardTraining;
+extern tcudnnNormalizationBackward *cudnnNormalizationBackward;
+extern tcudnnSpatialTfGridGeneratorBackward *cudnnSpatialTfGridGeneratorBackward;
+extern tcudnnSpatialTfSamplerBackward *cudnnSpatialTfSamplerBackward;
+extern tcudnnDropoutBackward *cudnnDropoutBackward;
+extern tcudnnOpsTrainVersionCheck *cudnnOpsTrainVersionCheck;
+extern tcudnnCreateRNNDescriptor *cudnnCreateRNNDescriptor;
+extern tcudnnDestroyRNNDescriptor *cudnnDestroyRNNDescriptor;
+extern tcudnnSetRNNDescriptor_v8 *cudnnSetRNNDescriptor_v8;
+extern tcudnnGetRNNDescriptor_v8 *cudnnGetRNNDescriptor_v8;
+extern tcudnnSetRNNDescriptor_v6 *cudnnSetRNNDescriptor_v6;
+extern tcudnnGetRNNDescriptor_v6 *cudnnGetRNNDescriptor_v6;
+extern tcudnnSetRNNMatrixMathType *cudnnSetRNNMatrixMathType;
+extern tcudnnGetRNNMatrixMathType *cudnnGetRNNMatrixMathType;
+extern tcudnnSetRNNBiasMode *cudnnSetRNNBiasMode;
+extern tcudnnGetRNNBiasMode *cudnnGetRNNBiasMode;
+extern tcudnnRNNSetClip_v8 *cudnnRNNSetClip_v8;
+extern tcudnnRNNGetClip_v8 *cudnnRNNGetClip_v8;
+extern tcudnnRNNSetClip *cudnnRNNSetClip;
+extern tcudnnRNNGetClip *cudnnRNNGetClip;
+extern tcudnnSetRNNProjectionLayers *cudnnSetRNNProjectionLayers;
+extern tcudnnGetRNNProjectionLayers *cudnnGetRNNProjectionLayers;
+extern tcudnnCreatePersistentRNNPlan *cudnnCreatePersistentRNNPlan;
+extern tcudnnDestroyPersistentRNNPlan *cudnnDestroyPersistentRNNPlan;
+extern tcudnnSetPersistentRNNPlan *cudnnSetPersistentRNNPlan;
+extern tcudnnBuildRNNDynamic *cudnnBuildRNNDynamic;
+extern tcudnnGetRNNWorkspaceSize *cudnnGetRNNWorkspaceSize;
+extern tcudnnGetRNNTrainingReserveSize *cudnnGetRNNTrainingReserveSize;
+extern tcudnnGetRNNTempSpaceSizes *cudnnGetRNNTempSpaceSizes;
+extern tcudnnGetRNNParamsSize *cudnnGetRNNParamsSize;
+extern tcudnnGetRNNWeightSpaceSize *cudnnGetRNNWeightSpaceSize;
+extern tcudnnGetRNNLinLayerMatrixParams *cudnnGetRNNLinLayerMatrixParams;
+extern tcudnnGetRNNLinLayerBiasParams *cudnnGetRNNLinLayerBiasParams;
+extern tcudnnGetRNNWeightParams *cudnnGetRNNWeightParams;
+extern tcudnnRNNForwardInference *cudnnRNNForwardInference;
+extern tcudnnSetRNNPaddingMode *cudnnSetRNNPaddingMode;
+extern tcudnnGetRNNPaddingMode *cudnnGetRNNPaddingMode;
+extern tcudnnCreateRNNDataDescriptor *cudnnCreateRNNDataDescriptor;
+extern tcudnnDestroyRNNDataDescriptor *cudnnDestroyRNNDataDescriptor;
+extern tcudnnSetRNNDataDescriptor *cudnnSetRNNDataDescriptor;
+extern tcudnnGetRNNDataDescriptor *cudnnGetRNNDataDescriptor;
+extern tcudnnRNNForwardInferenceEx *cudnnRNNForwardInferenceEx;
+extern tcudnnRNNForward *cudnnRNNForward;
+extern tcudnnSetRNNAlgorithmDescriptor *cudnnSetRNNAlgorithmDescriptor;
+extern tcudnnGetRNNForwardInferenceAlgorithmMaxCount *cudnnGetRNNForwardInferenceAlgorithmMaxCount;
+extern tcudnnFindRNNForwardInferenceAlgorithmEx *cudnnFindRNNForwardInferenceAlgorithmEx;
+extern tcudnnCreateSeqDataDescriptor *cudnnCreateSeqDataDescriptor;
+extern tcudnnDestroySeqDataDescriptor *cudnnDestroySeqDataDescriptor;
+extern tcudnnSetSeqDataDescriptor *cudnnSetSeqDataDescriptor;
+extern tcudnnGetSeqDataDescriptor *cudnnGetSeqDataDescriptor;
+extern tcudnnCreateAttnDescriptor *cudnnCreateAttnDescriptor;
+extern tcudnnDestroyAttnDescriptor *cudnnDestroyAttnDescriptor;
+extern tcudnnSetAttnDescriptor *cudnnSetAttnDescriptor;
+extern tcudnnGetAttnDescriptor *cudnnGetAttnDescriptor;
+extern tcudnnGetMultiHeadAttnBuffers *cudnnGetMultiHeadAttnBuffers;
+extern tcudnnGetMultiHeadAttnWeights *cudnnGetMultiHeadAttnWeights;
+extern tcudnnMultiHeadAttnForward *cudnnMultiHeadAttnForward;
+extern tcudnnAdvInferVersionCheck *cudnnAdvInferVersionCheck;
+extern tcudnnRNNForwardTraining *cudnnRNNForwardTraining;
+extern tcudnnRNNBackwardData *cudnnRNNBackwardData;
+extern tcudnnRNNBackwardData_v8 *cudnnRNNBackwardData_v8;
+extern tcudnnRNNBackwardWeights *cudnnRNNBackwardWeights;
+extern tcudnnRNNBackwardWeights_v8 *cudnnRNNBackwardWeights_v8;
+extern tcudnnRNNForwardTrainingEx *cudnnRNNForwardTrainingEx;
+extern tcudnnRNNBackwardDataEx *cudnnRNNBackwardDataEx;
+extern tcudnnRNNBackwardWeightsEx *cudnnRNNBackwardWeightsEx;
+extern tcudnnGetRNNForwardTrainingAlgorithmMaxCount *cudnnGetRNNForwardTrainingAlgorithmMaxCount;
+extern tcudnnFindRNNForwardTrainingAlgorithmEx *cudnnFindRNNForwardTrainingAlgorithmEx;
+extern tcudnnGetRNNBackwardDataAlgorithmMaxCount *cudnnGetRNNBackwardDataAlgorithmMaxCount;
+extern tcudnnFindRNNBackwardDataAlgorithmEx *cudnnFindRNNBackwardDataAlgorithmEx;
+extern tcudnnGetRNNBackwardWeightsAlgorithmMaxCount *cudnnGetRNNBackwardWeightsAlgorithmMaxCount;
+extern tcudnnFindRNNBackwardWeightsAlgorithmEx *cudnnFindRNNBackwardWeightsAlgorithmEx;
+extern tcudnnMultiHeadAttnBackwardData *cudnnMultiHeadAttnBackwardData;
+extern tcudnnMultiHeadAttnBackwardWeights *cudnnMultiHeadAttnBackwardWeights;
+extern tcudnnCreateCTCLossDescriptor *cudnnCreateCTCLossDescriptor;
+extern tcudnnSetCTCLossDescriptor *cudnnSetCTCLossDescriptor;
+extern tcudnnSetCTCLossDescriptorEx *cudnnSetCTCLossDescriptorEx;
+extern tcudnnSetCTCLossDescriptor_v8 *cudnnSetCTCLossDescriptor_v8;
+extern tcudnnGetCTCLossDescriptor *cudnnGetCTCLossDescriptor;
+extern tcudnnGetCTCLossDescriptorEx *cudnnGetCTCLossDescriptorEx;
+extern tcudnnGetCTCLossDescriptor_v8 *cudnnGetCTCLossDescriptor_v8;
+extern tcudnnDestroyCTCLossDescriptor *cudnnDestroyCTCLossDescriptor;
+extern tcudnnCTCLoss *cudnnCTCLoss;
+extern tcudnnCTCLoss_v8 *cudnnCTCLoss_v8;
+extern tcudnnGetCTCLossWorkspaceSize *cudnnGetCTCLossWorkspaceSize;
+extern tcudnnGetCTCLossWorkspaceSize_v8 *cudnnGetCTCLossWorkspaceSize_v8;
+extern tcudnnAdvTrainVersionCheck *cudnnAdvTrainVersionCheck;
+extern tcudnnCreateConvolutionDescriptor *cudnnCreateConvolutionDescriptor;
+extern tcudnnDestroyConvolutionDescriptor *cudnnDestroyConvolutionDescriptor;
+extern tcudnnSetConvolutionMathType *cudnnSetConvolutionMathType;
+extern tcudnnGetConvolutionMathType *cudnnGetConvolutionMathType;
+extern tcudnnSetConvolutionGroupCount *cudnnSetConvolutionGroupCount;
+extern tcudnnGetConvolutionGroupCount *cudnnGetConvolutionGroupCount;
+extern tcudnnSetConvolutionReorderType *cudnnSetConvolutionReorderType;
+extern tcudnnGetConvolutionReorderType *cudnnGetConvolutionReorderType;
+extern tcudnnSetConvolution2dDescriptor *cudnnSetConvolution2dDescriptor;
+extern tcudnnGetConvolution2dDescriptor *cudnnGetConvolution2dDescriptor;
+extern tcudnnSetConvolutionNdDescriptor *cudnnSetConvolutionNdDescriptor;
+extern tcudnnGetConvolutionNdDescriptor *cudnnGetConvolutionNdDescriptor;
+extern tcudnnGetConvolution2dForwardOutputDim *cudnnGetConvolution2dForwardOutputDim;
+extern tcudnnGetConvolutionNdForwardOutputDim *cudnnGetConvolutionNdForwardOutputDim;
+extern tcudnnGetConvolutionForwardAlgorithmMaxCount *cudnnGetConvolutionForwardAlgorithmMaxCount;
+extern tcudnnGetConvolutionForwardAlgorithm_v7 *cudnnGetConvolutionForwardAlgorithm_v7;
+extern tcudnnFindConvolutionForwardAlgorithm *cudnnFindConvolutionForwardAlgorithm;
+extern tcudnnFindConvolutionForwardAlgorithmEx *cudnnFindConvolutionForwardAlgorithmEx;
+extern tcudnnIm2Col *cudnnIm2Col;
+extern tcudnnReorderFilterAndBias *cudnnReorderFilterAndBias;
+extern tcudnnGetConvolutionForwardWorkspaceSize *cudnnGetConvolutionForwardWorkspaceSize;
+extern tcudnnConvolutionForward *cudnnConvolutionForward;
+extern tcudnnConvolutionBiasActivationForward *cudnnConvolutionBiasActivationForward;
+extern tcudnnGetConvolutionBackwardDataAlgorithmMaxCount *cudnnGetConvolutionBackwardDataAlgorithmMaxCount;
+extern tcudnnFindConvolutionBackwardDataAlgorithm *cudnnFindConvolutionBackwardDataAlgorithm;
+extern tcudnnFindConvolutionBackwardDataAlgorithmEx *cudnnFindConvolutionBackwardDataAlgorithmEx;
+extern tcudnnGetConvolutionBackwardDataAlgorithm_v7 *cudnnGetConvolutionBackwardDataAlgorithm_v7;
+extern tcudnnGetConvolutionBackwardDataWorkspaceSize *cudnnGetConvolutionBackwardDataWorkspaceSize;
+extern tcudnnConvolutionBackwardData *cudnnConvolutionBackwardData;
+extern tcudnnGetFoldedConvBackwardDataDescriptors *cudnnGetFoldedConvBackwardDataDescriptors;
+extern tcudnnCnnInferVersionCheck *cudnnCnnInferVersionCheck;
+extern tcudnnGetConvolutionBackwardFilterAlgorithmMaxCount *cudnnGetConvolutionBackwardFilterAlgorithmMaxCount;
+extern tcudnnFindConvolutionBackwardFilterAlgorithm *cudnnFindConvolutionBackwardFilterAlgorithm;
+extern tcudnnFindConvolutionBackwardFilterAlgorithmEx *cudnnFindConvolutionBackwardFilterAlgorithmEx;
+extern tcudnnGetConvolutionBackwardFilterAlgorithm_v7 *cudnnGetConvolutionBackwardFilterAlgorithm_v7;
+extern tcudnnGetConvolutionBackwardFilterWorkspaceSize *cudnnGetConvolutionBackwardFilterWorkspaceSize;
+extern tcudnnConvolutionBackwardFilter *cudnnConvolutionBackwardFilter;
+extern tcudnnConvolutionBackwardBias *cudnnConvolutionBackwardBias;
 extern tcudnnCreateFusedOpsConstParamPack *cudnnCreateFusedOpsConstParamPack;
 extern tcudnnDestroyFusedOpsConstParamPack *cudnnDestroyFusedOpsConstParamPack;
 extern tcudnnSetFusedOpsConstParamPackAttribute *cudnnSetFusedOpsConstParamPackAttribute;
@@ -2534,8 +2986,14 @@ extern tcudnnCreateFusedOpsPlan *cudnnCreateFusedOpsPlan;
 extern tcudnnDestroyFusedOpsPlan *cudnnDestroyFusedOpsPlan;
 extern tcudnnMakeFusedOpsPlan *cudnnMakeFusedOpsPlan;
 extern tcudnnFusedOpsExecute *cudnnFusedOpsExecute;
-extern tcudnnSetRNNDescriptor_v6 *cudnnSetRNNDescriptor_v6;
-extern tcudnnSetRNNDescriptor_v5 *cudnnSetRNNDescriptor_v5;
+extern tcudnnCnnTrainVersionCheck *cudnnCnnTrainVersionCheck;
+extern tcudnnBackendCreateDescriptor *cudnnBackendCreateDescriptor;
+extern tcudnnBackendDestroyDescriptor *cudnnBackendDestroyDescriptor;
+extern tcudnnBackendInitialize *cudnnBackendInitialize;
+extern tcudnnBackendFinalize *cudnnBackendFinalize;
+extern tcudnnBackendSetAttribute *cudnnBackendSetAttribute;
+extern tcudnnBackendGetAttribute *cudnnBackendGetAttribute;
+extern tcudnnBackendExecute *cudnnBackendExecute;
 
 
 enum {
