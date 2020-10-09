@@ -11,7 +11,7 @@ option(MINIOPTIX_WITH_CUEW "Use cuew(no CUDA SDK required, but need to manually 
 set(MINIOPTIX_CUSTOM_LINKER "" CACHE STRING "Set custom linker name(e.g. 'lld'). Assume the compiler supports `-fuse=ld=` linker flags.")
 
 if (WIN32)
-  set(DEFAULT_OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 7.1.0/")
+  set(DEFAULT_OPTIX_INSTALL_DIR "C:/ProgramData/NVIDIA Corporation/OptiX SDK 7.2.0/")
 else()
   set(DEFAULT_OPTIX_INSTALL_DIR "${CMAKE_SOURCE_DIR}/../")
 endif()

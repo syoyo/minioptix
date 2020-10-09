@@ -10,7 +10,7 @@ Minimal dependency OptiX sample.
 * C++11 or later
 * CMake
 * (optional) ninja build
-* OptiX 7.1(OptiX 6 would work) SDK(header files)
+* OptiX 7.1 or later SDK(header files)
 
 ## Supported platforms
 
