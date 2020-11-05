@@ -1,20 +1,21 @@
 syoyo's modification to CUEW.
 
-Currently tests on Ubuntu 18.04.
+Currently tested on Ubuntu 18.04 x86-64 and Windows 10 64bit.
 
-## Changes
+## Changes compared to original version
 
-* Support CUDA 10.2
-* Support CUDNN 7.6
+* Support CUDA 11.1
+* Support CUDNN 8.0.3
 
 ## Supported API
 
 * [x] cuda.h
 * [x] cudnn.h
 * [x] nvrtc.h
-* [ ] cudaGL.h
+* [x] cudaGL.h
+  * [ ] Use cuda_gl_interop.h instead
 
-## Generate cuew
+## Generate cuew(for developer)
 
 You need python3.
 Install pycparser.
@@ -29,6 +30,13 @@ $ cd auto
 $ ./cuew_gen.sh
 ```
 
+### GL header
+
+If you encounter the parse error on GL header, there is a work around.
+
+Copy `cudaGL.h` to `mycudaGL.h` and remove `<GL/gl.h>` include line. and use `mycudaGL.h` as an input .h file.
+Content of `<gl.h>` is not used when generating cuew header/source.
+
 ## Buld tests
 
 ```
@@ -40,14 +48,16 @@ $ make
 
 ## Known issues
 
-* Combining with Address Sanitizer(`-fsanitizer=address`) won't work(calling CUDA API results in undefined behavior)
-* CUEW does not warn when using deprecated API
+* Combining with Address Sanitizer(`-fsanitizer=address`) won't work
+  * calling CUDA API results in undefined behavior or seg faults
+  * https://github.com/google/sanitizers/issues/629
+* CUEW does not report warning when using deprecated CUDA API
 
 ## TODO
 
 * [ ] Test on MSVC.
-* [ ] Support cudaGL.h
-* [x] Keep up with CUDA 10.2
+  * [x] `clang-cl` works
+* [ ] Test CUDA-GL interop API
 * [ ] Test cuDNN API call.
 * [ ] Find a way to co-exist with Address Sanitizer
 
