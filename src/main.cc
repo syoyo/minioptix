@@ -9,9 +9,13 @@
 #include <sstream>
 #include <vector>
 
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Weverything"
+#endif
+
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb_image_write.h"
-
 #ifdef MINIOPTIX_USE_CUEW
 #include <cuew.h>
 
@@ -24,6 +28,10 @@
 #include <optix_function_table_definition.h>
 #include <optix_stack_size.h>
 #include <optix_stubs.h>
+
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 
 #define CU_CHECK(cond)                                                 \
   do {                                                                 \
@@ -107,8 +115,17 @@ struct SbtRecord {
   __declspec(align(
       OPTIX_SBT_RECORD_ALIGNMENT)) char header[OPTIX_SBT_RECORD_HEADER_SIZE];
 #else  // assume gcc or clang
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wold-style-cast"
+#endif
+
   char header[OPTIX_SBT_RECORD_HEADER_SIZE]
       __attribute__((aligned(OPTIX_SBT_RECORD_ALIGNMENT)));
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
+
 #endif
   T data;
 };
@@ -117,7 +134,7 @@ typedef SbtRecord<RayGenData> RayGenSbtRecord;
 typedef SbtRecord<MissData> MissSbtRecord;
 typedef SbtRecord<HitGroupData> HitGroupSbtRecord;
 
-bool CUDAAllocDeviceMem(CUdeviceptr* dptr, size_t sz) {
+static bool CUDAAllocDeviceMem(CUdeviceptr* dptr, size_t sz) {
   CU_CHECK(cuMemAlloc(dptr, sz));
 
   return true;
@@ -129,7 +146,7 @@ static void context_log_cb(unsigned int level, const char* tag,
             << "]: " << message << "\n";
 }
 
-bool LoadPTXFromFile(const std::string& filename, std::string* output) {
+static bool LoadPTXFromFile(const std::string& filename, std::string* output) {
   std::ifstream ifs(filename);
   if (!ifs) {
     return false;
@@ -212,7 +229,7 @@ static void BuildAccel(const OptixDeviceContext& context,
 
     OPTIX_CHECK(optixAccelBuild(
         context,
-        0,  // CUDA stream
+        nullptr,  // CUDA stream
         &accel_options, &triangle_input,
         1,  // num build inputs
         d_temp_buffer_gas, gas_buffer_sizes.tempSizeInBytes,
@@ -237,7 +254,9 @@ static void BuildAccel(const OptixDeviceContext& context,
 }
 
 int main(int argc, char** argv) {
-#if _MSC_VER
+  (void)argc;
+  (void)argv;
+#ifdef _MSC_VER
   // Assume repository top is set to the working directory(See CMakeLists.txt).
   const std::string ptx_filename = "data/optixTriangle.ptx";
 #else
@@ -246,7 +265,8 @@ int main(int argc, char** argv) {
 
   static_assert(
       offsetof(RayGenSbtRecord, data) % OPTIX_SBT_RECORD_ALIGNMENT == 0,
-      "Member variable must be aligned to multiple of OPTIX_SBT_RECORD_ALIGNMENT(=16)");
+      "Member variable must be aligned to multiple of "
+      "OPTIX_SBT_RECORD_ALIGNMENT(=16)");
 
 #ifdef MINIOPTIX_USE_CUEW
   if (cuewInit(CUEW_INIT_CUDA) != CUEW_SUCCESS) {
@@ -341,7 +361,6 @@ int main(int argc, char** argv) {
     CUdeviceptr d_gas_output_buffer;
     BuildAccel(context, &gas_handle, &d_gas_output_buffer);
 
-
     char logbuf[2048];
 
     //
@@ -374,7 +393,7 @@ int main(int argc, char** argv) {
 
       pipeline_compile_options.pipelineLaunchParamsVariableName = "params";
       pipeline_compile_options.usesPrimitiveTypeFlags =
-          OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE;
+          static_cast<unsigned int>(OPTIX_PRIMITIVE_TYPE_FLAGS_TRIANGLE);
 
       std::string ptx;
       if (!LoadPTXFromFile(ptx_filename, &ptx)) {
@@ -518,7 +537,7 @@ int main(int argc, char** argv) {
     int width = 1024;
     int height = 768;
     CUdeviceptr d_image;  // size = uchar4 * width * height
-    CUDAAllocDeviceMem(&d_image, 4 * width * height);
+    CUDAAllocDeviceMem(&d_image, size_t(4 * width * height));
 
     //
     // launch
@@ -529,12 +548,14 @@ int main(int argc, char** argv) {
       CU_CHECK(cuStreamCreate(&stream, CU_STREAM_DEFAULT));
 
       params.image = d_image;
-      params.image_width = width;
-      params.image_height = height;
+      params.image_width = static_cast<unsigned int>(width);
+      params.image_height = static_cast<unsigned int>(height);
       params.handle = gas_handle;
 
-      std::cout << "offsetof(image_width) = " << offsetof(Params, image_width) << "\n";
-      std::cout << "offsetof(image_height) = " << offsetof(Params, image_height) << "\n";
+      std::cout << "offsetof(image_width) = " << offsetof(Params, image_width)
+                << "\n";
+      std::cout << "offsetof(image_height) = " << offsetof(Params, image_height)
+                << "\n";
       std::cout << "offsetof(cam_u) = " << offsetof(Params, cam_u) << "\n";
       std::cout << "offsetof(cam_v) = " << offsetof(Params, cam_v) << "\n";
       std::cout << "offsetof(cam_w) = " << offsetof(Params, cam_w) << "\n";
@@ -563,7 +584,8 @@ int main(int argc, char** argv) {
       CU_CHECK(cuMemcpyHtoD(d_param, &params, sizeof(params)));
 
       OPTIX_CHECK(optixLaunch(pipeline, stream, d_param, sizeof(Params), &sbt,
-                              width, height, /*depth=*/1));
+                              static_cast<unsigned int>(width),
+                              static_cast<unsigned int>(height), /*depth=*/1));
 
       CU_SYNC_CHECK();
 
@@ -574,7 +596,7 @@ int main(int argc, char** argv) {
     // Readback result.
     //
     std::vector<uint8_t> h_image;
-    h_image.resize(4 * width * height, 0);
+    h_image.resize(size_t(4 * width * height), 0);
 
     CU_CHECK(cuMemcpyDtoH(reinterpret_cast<void*>(h_image.data()), params.image,
                           h_image.size()));
